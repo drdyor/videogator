@@ -1,0 +1,155 @@
+import { InsertService, InsertPharmaTemplate } from "../drizzle/schema";
+
+export const mockServices: InsertService[] = [
+  {
+    id: "runway",
+    name: "Runway ML",
+    category: "general",
+    description: "AI-powered video generation and editing. Create stunning videos with simple text prompts.",
+    capabilities: JSON.stringify(["Text-to-video", "Video editing", "Motion tracking", "Real-time generation"]),
+    pricing: "Pay-as-you-go",
+    website: "https://runwayml.com",
+    icon: "🎬",
+  },
+  {
+    id: "pika",
+    name: "Pika",
+    category: "general",
+    description: "Next-generation video generation platform with advanced AI capabilities.",
+    capabilities: JSON.stringify(["Text-to-video", "Image-to-video", "Video editing", "Style transfer"]),
+    pricing: "Free tier + Pro",
+    website: "https://pika.art",
+    icon: "✨",
+  },
+  {
+    id: "luma",
+    name: "Luma AI",
+    category: "general",
+    description: "Create photorealistic videos from text and images with physics-based rendering.",
+    capabilities: JSON.stringify(["Text-to-video", "Image-to-video", "3D rendering", "Physics simulation"]),
+    pricing: "Beta access",
+    website: "https://lumalabs.ai",
+    icon: "🌟",
+  },
+  {
+    id: "haiper",
+    name: "Haiper",
+    category: "general",
+    description: "High-fidelity video generation with advanced motion control.",
+    capabilities: JSON.stringify(["Text-to-video", "Motion control", "Video enhancement", "Batch processing"]),
+    pricing: "Free credits + Premium",
+    website: "https://haiper.ai",
+    icon: "🎥",
+  },
+  {
+    id: "stable-video",
+    name: "Stable Video Diffusion",
+    category: "general",
+    description: "Open-source video generation model for custom implementations.",
+    capabilities: JSON.stringify(["Image-to-video", "Fine-tuning", "Custom models", "API access"]),
+    pricing: "Open source",
+    website: "https://stability.ai",
+    icon: "🔧",
+  },
+  {
+    id: "synthesia",
+    name: "Synthesia",
+    category: "specialized",
+    description: "AI video creation with digital avatars and multilingual support.",
+    capabilities: JSON.stringify(["Avatar videos", "Multilingual", "Corporate videos", "Training content"]),
+    pricing: "Enterprise",
+    website: "https://synthesia.io",
+    icon: "👤",
+  },
+  {
+    id: "pharma-pro",
+    name: "Pharma Pro Visualizer",
+    category: "pharma",
+    description: "Specialized molecular animation and drug visualization for pharmaceutical companies.",
+    capabilities: JSON.stringify(["Molecular binding", "Protein dynamics", "Drug interactions", "Scientific accuracy"]),
+    pricing: "Enterprise - $20k/month",
+    website: "https://pharma-pro.example.com",
+    icon: "🧬",
+  },
+];
+
+export const mockPharmaTemplates: InsertPharmaTemplate[] = [
+  {
+    name: "Ligand-Receptor Binding",
+    description: "Visualize how small molecules bind to protein receptors with accurate molecular dynamics.",
+    category: "ligand-binding",
+    parameters: JSON.stringify({
+      proteinName: { type: "string", label: "Protein Name", default: "EGFR" },
+      ligandName: { type: "string", label: "Ligand Name", default: "Gefitinib" },
+      bindingAffinity: { type: "number", label: "Binding Affinity (nM)", default: 2.3 },
+      speed: { type: "number", label: "Animation Speed", min: 0.5, max: 2, default: 1 },
+      cameraAngle: { type: "string", label: "Camera View", options: ["top", "side", "dynamic"] },
+      ligandColor: { type: "color", label: "Ligand Color", default: "#FF6B6B" },
+      proteinColor: { type: "color", label: "Protein Color", default: "#4ECDC4" },
+    }),
+    previewImage: "https://images.unsplash.com/photo-1576091160550-112173f7f869?w=400&h=300&fit=crop",
+  },
+  {
+    name: "Antibody-Drug Conjugate",
+    description: "Showcase antibody-drug conjugate (ADC) structure and mechanism of action.",
+    category: "antibody-conjugate",
+    parameters: JSON.stringify({
+      antibodyType: { type: "string", label: "Antibody Type", default: "IgG1" },
+      drugPayload: { type: "string", label: "Drug Payload", default: "Toxin" },
+      linkerType: { type: "string", label: "Linker Type", options: ["cleavable", "non-cleavable"] },
+      dac: { type: "number", label: "Drug-to-Antibody Ratio", min: 1, max: 8, default: 4 },
+      rotationSpeed: { type: "number", label: "Rotation Speed", min: 0.5, max: 2, default: 1 },
+      antibodyColor: { type: "color", label: "Antibody Color", default: "#9B59B6" },
+      drugColor: { type: "color", label: "Drug Color", default: "#E74C3C" },
+    }),
+    previewImage: "https://images.unsplash.com/photo-1530026405186-532bc87b6b83?w=400&h=300&fit=crop",
+  },
+  {
+    name: "Membrane Protein Dynamics",
+    description: "Animate membrane protein interactions and conformational changes.",
+    category: "membrane-dynamics",
+    parameters: JSON.stringify({
+      proteinName: { type: "string", label: "Protein Name", default: "GPCR" },
+      membraneType: { type: "string", label: "Membrane Type", options: ["lipid-bilayer", "micelle"] },
+      conformationStates: { type: "number", label: "Conformational States", min: 2, max: 5, default: 3 },
+      transitionTime: { type: "number", label: "Transition Time (s)", min: 1, max: 10, default: 3 },
+      proteinColor: { type: "color", label: "Protein Color", default: "#3498DB" },
+      membraneColor: { type: "color", label: "Membrane Color", default: "#F39C12" },
+    }),
+    previewImage: "https://images.unsplash.com/photo-1579154204601-01d82b27d100?w=400&h=300&fit=crop",
+  },
+  {
+    name: "mRNA Translation Process",
+    description: "Visualize mRNA translation with ribosome dynamics and protein synthesis.",
+    category: "mrna-translation",
+    parameters: JSON.stringify({
+      geneSequence: { type: "string", label: "Gene Name", default: "GFP" },
+      ribosomeType: { type: "string", label: "Ribosome Type", options: ["80S", "70S"] },
+      translationSpeed: { type: "number", label: "Translation Speed", min: 0.5, max: 2, default: 1 },
+      showCodon: { type: "boolean", label: "Show Codon Sequence", default: true },
+      mrnaColor: { type: "color", label: "mRNA Color", default: "#E67E22" },
+      ribosomeColor: { type: "color", label: "Ribosome Color", default: "#1ABC9C" },
+    }),
+    previewImage: "https://images.unsplash.com/photo-1576091160550-112173f7f869?w=400&h=300&fit=crop",
+  },
+  {
+    name: "Enzyme Catalysis Mechanism",
+    description: "Demonstrate enzyme-substrate interactions and catalytic mechanisms.",
+    category: "enzyme-catalysis",
+    parameters: JSON.stringify({
+      enzymeName: { type: "string", label: "Enzyme Name", default: "Trypsin" },
+      substrateName: { type: "string", label: "Substrate Name", default: "Peptide" },
+      catalyticSteps: { type: "number", label: "Catalytic Steps", min: 2, max: 6, default: 4 },
+      stepDuration: { type: "number", label: "Step Duration (s)", min: 1, max: 5, default: 2 },
+      enzymeColor: { type: "color", label: "Enzyme Color", default: "#C0392B" },
+      substrateColor: { type: "color", label: "Substrate Color", default: "#27AE60" },
+    }),
+    previewImage: "https://images.unsplash.com/photo-1576091160550-112173f7f869?w=400&h=300&fit=crop",
+  },
+];
+
+export async function seedMockData() {
+  // This function would be called during initialization
+  // For now, mock data is returned directly from API calls
+  console.log("Mock data seeding not implemented - data returned on-demand");
+}
