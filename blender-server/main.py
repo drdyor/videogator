@@ -73,10 +73,10 @@ async def queue_render(job: PharmaRenderJob, background_tasks: BackgroundTasks):
     
     # Create job config
     config_path = f"/tmp/{job.project_id}.json"
-    output_path = f"/output/{job.project_id}.mp4"
+    output_path = f"/tmp/blender_output/{job.project_id}.mp4"
     
     # Ensure output directory exists
-    os.makedirs("/output", exist_ok=True)
+    os.makedirs("/tmp/blender_output", exist_ok=True)
     
     # Write job configuration
     with open(config_path, 'w') as f:
