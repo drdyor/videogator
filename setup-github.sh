@@ -1,0 +1,28 @@
+#!/bin/bash
+# GitHub Repository Setup Script
+
+echo "🚀 VideoGator - GitHub Repository Setup"
+echo "========================================"
+echo ""
+echo "Creating GitHub repository for VideoGator..."
+echo ""
+echo "Repository Details:"
+echo "-------------------"
+echo "Name: videogator"
+echo "Description: AI video aggregation platform with multi-provider support and pharma MOA visualization"
+echo "Private: Yes (recommended)"
+echo ""
+echo "After creating the repo on GitHub, run these commands:"
+echo ""
+echo "cd '/Users/dreva/Desktop/cursor/video generation pharma/video-aggregator-uvgo/video-aggregator-uvgo'"
+echo ""
+echo "# Add your GitHub repo as remote (replace YOUR_USERNAME)"
+echo "git remote add origin https://github.com/YOUR_USERNAME/videogator.git"
+echo ""
+echo "# Push all 7 commits to GitHub"
+echo "git branch -M main"
+echo "git push -u origin main"
+echo ""
+echo "========================================"
+echo "Your commits ready to push:"
+git log --oneline
