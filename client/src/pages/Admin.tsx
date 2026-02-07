@@ -219,7 +219,7 @@ export default function Admin() {
                 <div>
                   <div className="font-medium capitalize">{row.key}</div>
                   <div className="text-xs text-muted-foreground">
-                    {DEFAULT_PRICING_RULES[row.key]?.costCents === 0
+                    {DEFAULT_PRICING_RULES[row.key as keyof typeof DEFAULT_PRICING_RULES]?.costCents === 0
                       ? "CPU-friendly"
                       : "GPU-backed"}
                   </div>

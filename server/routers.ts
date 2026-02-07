@@ -306,11 +306,11 @@ export const appRouter = router({
     }),
     metrics: adminProcedure.query(async () => {
       const allProjects = await db.getAllProjectsForAdmin();
-      const totals = allProjects.reduce<Record<string, number>>((acc, project) => {
-        acc.total += 1;
-        acc[project.status] = (acc[project.status] ?? 0) + 1;
-        return acc;
-      }, { total: 0 });
+      const totals: Record<string, number> = { total: 0 };
+      for (const project of allProjects) {
+        totals.total += 1;
+        totals[project.status] = (totals[project.status] ?? 0) + 1;
+      }
 
       return {
         totals,
