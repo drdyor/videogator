@@ -1,24 +1,26 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { integer, pgEnum, pgTable, text, timestamp, varchar, serial } from "drizzle-orm/pg-core";
 
 /**
  * Core user table backing auth flow.
  * Extend this file with additional tables as your product grows.
  * Columns use camelCase to match both database fields and generated types.
  */
-export const users = mysqlTable("users", {
+export const roleEnum = pgEnum("role", ["user", "admin"]);
+
+export const users = pgTable("users", {
   /**
    * Surrogate primary key. Auto-incremented numeric value managed by the database.
    * Use this for relations between tables.
    */
-  id: int("id").autoincrement().primaryKey(),
+  id: serial("id").primaryKey(),
   /** Manus OAuth identifier (openId) returned from the OAuth callback. Unique per user. */
   openId: varchar("openId", { length: 64 }).notNull().unique(),
   name: text("name"),
   email: varchar("email", { length: 320 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
-  role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
+  role: roleEnum("role").default("user").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
   encryptedApiKeys: text("encryptedApiKeys"),
 });
@@ -26,39 +28,45 @@ export const users = mysqlTable("users", {
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
-export const projects = mysqlTable("projects", {
-  id: int("id").autoincrement().primaryKey(),
-  userId: int("userId").notNull(),
+export const projectStatusEnum = pgEnum("project_status", ["draft", "generating", "completed", "failed"]);
+
+export const projects = pgTable("projects", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
   name: varchar("name", { length: 255 }).notNull(),
   description: text("description"),
   serviceId: varchar("serviceId", { length: 64 }).notNull(),
-  status: mysqlEnum("status", ["draft", "generating", "completed", "failed"]).default("draft").notNull(),
+  status: projectStatusEnum("status").default("draft").notNull(),
   prompt: text("prompt"),
   settings: text("settings"), // JSON string for service-specific settings
   videoUrl: varchar("videoUrl", { length: 512 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 
-export const jobs = mysqlTable("jobs", {
+export const jobStatusEnum = pgEnum("job_status", ["queued", "processing", "completed", "failed"]);
+
+export const jobs = pgTable("jobs", {
   id: varchar("id", { length: 64 }).primaryKey(),
-  userId: int("userId").notNull(),
-  status: mysqlEnum("status", ["queued", "processing", "completed", "failed"]).default("queued").notNull(),
+  userId: integer("userId").notNull(),
+  status: jobStatusEnum("status").default("queued").notNull(),
   inputUrl: text("inputUrl").notNull(),
   operations: text("operations").notNull(), // JSON string
-  currentStep: int("currentStep").default(0).notNull(),
+  currentStep: integer("currentStep").default(0).notNull(),
   outputUrl: text("outputUrl"),
   stepResults: text("stepResults"),
   error: text("error"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
   completedAt: timestamp("completedAt"),
 });
 
-export const services = mysqlTable("services", {
+export const categoryEnum = pgEnum("category", ["general", "pharma", "specialized"]);
+
+export const services = pgTable("services", {
   id: varchar("id", { length: 64 }).primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
-  category: mysqlEnum("category", ["general", "pharma", "specialized"]).default("general").notNull(),
+  category: categoryEnum("category").default("general").notNull(),
   description: text("description"),
   capabilities: text("capabilities"), // JSON array of capability strings
   pricing: varchar("pricing", { length: 255 }),
@@ -67,8 +75,8 @@ export const services = mysqlTable("services", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
-export const pharmaTemplates = mysqlTable("pharmaTemplates", {
-  id: int("id").autoincrement().primaryKey(),
+export const pharmaTemplates = pgTable("pharmaTemplates", {
+  id: serial("id").primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
   description: text("description"),
   category: varchar("category", { length: 128 }).notNull(), // e.g., "ligand-binding", "antibody-conjugate"
@@ -77,36 +85,38 @@ export const pharmaTemplates = mysqlTable("pharmaTemplates", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
-export const featureFlags = mysqlTable("featureFlags", {
+export const featureFlags = pgTable("featureFlags", {
   key: varchar("key", { length: 128 }).primaryKey(),
-  enabled: int("enabled").default(1).notNull(),
+  enabled: integer("enabled").default(1).notNull(),
   description: text("description"),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 
-export const pricingRules = mysqlTable("pricingRules", {
+export const pricingRules = pgTable("pricingRules", {
   key: varchar("key", { length: 64 }).primaryKey(),
-  costCents: int("costCents").default(0).notNull(),
-  priceCents: int("priceCents").default(0).notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  costCents: integer("costCents").default(0).notNull(),
+  priceCents: integer("priceCents").default(0).notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 
-export const adminSettings = mysqlTable("adminSettings", {
+export const adminSettings = pgTable("adminSettings", {
   key: varchar("key", { length: 64 }).primaryKey(),
   value: text("value").notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 
-export const alerts = mysqlTable("alerts", {
-  id: int("id").autoincrement().primaryKey(),
-  level: mysqlEnum("level", ["info", "warning", "critical"]).notNull(),
+export const alertLevelEnum = pgEnum("alert_level", ["info", "warning", "critical"]);
+
+export const alerts = pgTable("alerts", {
+  id: serial("id").primaryKey(),
+  level: alertLevelEnum("level").notNull(),
   title: varchar("title", { length: 255 }).notNull(),
   message: text("message").notNull(),
   jobId: varchar("jobId", { length: 64 }),
-  userId: int("userId"),
+  userId: integer("userId"),
   error: text("error"),
   action: text("action"),
-  costCents: int("costCents"),
+  costCents: integer("costCents"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 

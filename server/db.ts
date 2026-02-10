@@ -1,5 +1,6 @@
 import { eq, desc } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/mysql2";
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
 import {
   InsertUser,
   users,
@@ -26,7 +27,8 @@ let _db: ReturnType<typeof drizzle> | null = null;
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
-      _db = drizzle(process.env.DATABASE_URL);
+      const client = postgres(process.env.DATABASE_URL);
+      _db = drizzle(client);
     } catch (error) {
       console.warn("[Database] Failed to connect:", error);
       _db = null;
@@ -85,7 +87,8 @@ export async function upsertUser(user: InsertUser): Promise<void> {
       updateSet.lastSignedIn = new Date();
     }
 
-    await db.insert(users).values(values).onDuplicateKeyUpdate({
+    await db.insert(users).values(values).onConflictDoUpdate({
+      target: users.openId,
       set: updateSet,
     });
   } catch (error) {
@@ -206,7 +209,8 @@ export async function getFeatureFlagValue(key: string) {
 export async function upsertFeatureFlag(flag: InsertFeatureFlag) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  return db.insert(featureFlags).values(flag).onDuplicateKeyUpdate({
+  return db.insert(featureFlags).values(flag).onConflictDoUpdate({
+    target: featureFlags.key,
     set: {
       enabled: flag.enabled,
       description: flag.description ?? null,
@@ -223,7 +227,8 @@ export async function getAllPricingRules() {
 export async function upsertPricingRule(rule: InsertPricingRule) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  return db.insert(pricingRules).values(rule).onDuplicateKeyUpdate({
+  return db.insert(pricingRules).values(rule).onConflictDoUpdate({
+    target: pricingRules.key,
     set: {
       costCents: rule.costCents,
       priceCents: rule.priceCents,
@@ -240,7 +245,8 @@ export async function getAllAdminSettings() {
 export async function upsertAdminSetting(setting: InsertAdminSetting) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  return db.insert(adminSettings).values(setting).onDuplicateKeyUpdate({
+  return db.insert(adminSettings).values(setting).onConflictDoUpdate({
+    target: adminSettings.key,
     set: {
       value: setting.value,
     },
