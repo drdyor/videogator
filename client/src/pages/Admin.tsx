@@ -22,7 +22,7 @@ type PricingRow = {
 };
 
 export default function Admin() {
-  const { user, loading } = useAuth({ redirectOnUnauthenticated: true });
+  const { user, loading } = useAuth();
   const flagsQuery = trpc.admin.flags.list.useQuery(undefined, {
     refetchOnWindowFocus: false,
   });

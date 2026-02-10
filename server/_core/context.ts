@@ -1,8 +1,12 @@
 import type { CreateExpressContextOptions } from "@trpc/server/adapters/express";
 import type { User } from "../../drizzle/schema";
-import { sdk } from "./sdk";
-import { ENV } from "./env";
+import { createClient } from "@supabase/supabase-js";
 import * as db from "../db";
+
+const supabase = createClient(
+  process.env.VITE_SUPABASE_URL ?? "",
+  process.env.VITE_SUPABASE_ANON_KEY ?? ""
+);
 
 export type TrpcContext = {
   req: CreateExpressContextOptions["req"];
@@ -10,37 +14,33 @@ export type TrpcContext = {
   user: User | null;
 };
 
-const DEMO_OPEN_ID = "demo-user";
-
-async function getOrCreateDemoUser(): Promise<User | null> {
-  try {
-    let user = await db.getUserByOpenId(DEMO_OPEN_ID);
-    if (!user) {
-      await db.upsertUser({
-        openId: DEMO_OPEN_ID,
-        name: "Demo User",
-        email: "demo@uvgo.app",
-        role: "admin",
-      });
-      user = await db.getUserByOpenId(DEMO_OPEN_ID);
-    }
-    return user ?? null;
-  } catch {
-    return null;
-  }
-}
-
 export async function createContext(
   opts: CreateExpressContextOptions
 ): Promise<TrpcContext> {
   let user: User | null = null;
 
-  if (!ENV.oAuthServerUrl) {
-    // Demo mode: auto-authenticate when OAuth is not configured
-    user = await getOrCreateDemoUser();
-  } else {
+  const authHeader = opts.req.headers.authorization;
+  if (authHeader?.startsWith("Bearer ")) {
+    const token = authHeader.slice(7);
     try {
-      user = await sdk.authenticateRequest(opts.req as any);
+      const { data, error } = await supabase.auth.getUser(token);
+      if (!error && data.user) {
+        const supaUser = data.user;
+        const openId = supaUser.id;
+
+        // Sync Supabase user to local DB
+        let localUser = await db.getUserByOpenId(openId);
+        if (!localUser) {
+          await db.upsertUser({
+            openId,
+            name: supaUser.user_metadata?.full_name || supaUser.email?.split("@")[0] || "User",
+            email: supaUser.email,
+            role: "admin",
+          });
+          localUser = await db.getUserByOpenId(openId);
+        }
+        user = localUser ?? null;
+      }
     } catch {
       user = null;
     }

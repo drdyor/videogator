@@ -1,22 +1,25 @@
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
+import Login from "@/pages/Login";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import DashboardLayout from "./components/DashboardLayout";
-import Home from "./pages/Home";
 import Dashboard from "./pages/Dashboard";
 import Services from "./pages/Services";
 import Projects from "./pages/Projects";
 import Pharma from "./pages/Pharma";
 import Admin from "./pages/Admin";
 import VideoFoundry from "./pages/VideoFoundry";
+import { supabase } from "@/lib/supabase";
+import { useState, useEffect } from "react";
+import type { Session } from "@supabase/supabase-js";
+import { Loader2 } from "lucide-react";
 
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={Home} />
       <Route path="/dashboard">
         {() => (
           <DashboardLayout>
@@ -60,26 +63,50 @@ function Router() {
         )}
       </Route>
       <Route path="/404" component={NotFound} />
-      <Route component={NotFound} />
+      <Route>
+        {() => (
+          <DashboardLayout>
+            <Dashboard />
+          </DashboardLayout>
+        )}
+      </Route>
     </Switch>
   );
 }
 
-// NOTE: About Theme
-// - First choose a default theme according to your design style (dark or light bg), than change color palette in index.css
-//   to keep consistent foreground/background color across components
-// - If you want to make theme switchable, pass `switchable` ThemeProvider and use `useTheme` hook
-
 function App() {
+  const [session, setSession] = useState<Session | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+      setLoading(false);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setSession(session);
+      }
+    );
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
   return (
     <ErrorBoundary>
-      <ThemeProvider
-        defaultTheme="dark"
-        // switchable
-      >
+      <ThemeProvider defaultTheme="dark">
         <TooltipProvider>
           <Toaster />
-          <Router />
+          {session ? <Router /> : <Login />}
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>
