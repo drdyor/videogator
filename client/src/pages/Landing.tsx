@@ -199,7 +199,7 @@ export default function Landing() {
                   {guide.question}
                 </h3>
                 <p className="text-sm text-muted-foreground line-clamp-2">
-                  {guide.content.slice(0, 150)}...
+                  {guide.content.replace(/\*\*/g, "").replace(/`/g, "").replace(/\|/g, "").replace(/^[-#]+\s/gm, "").slice(0, 150)}...
                 </p>
                 <div className="flex gap-2">
                   {guide.tags.slice(0, 2).map((tag) => (

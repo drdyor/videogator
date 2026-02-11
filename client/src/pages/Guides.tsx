@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { GUIDES, GUIDE_TAGS, type Guide } from "@/data/guides";
+import MarkdownContent from "@/components/MarkdownContent";
 import { ChevronDown, ChevronUp, BookOpen } from "lucide-react";
 
 export default function Guides() {
@@ -134,9 +135,7 @@ function GuideAccordion({
 
       {isExpanded && (
         <div className="px-5 pb-5 border-t border-gold-dim/10 pt-4">
-          <div className="prose prose-invert prose-sm max-w-none text-muted-foreground whitespace-pre-line leading-relaxed">
-            {guide.content}
-          </div>
+          <MarkdownContent>{guide.content}</MarkdownContent>
         </div>
       )}
     </div>
