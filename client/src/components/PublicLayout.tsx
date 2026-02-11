@@ -129,17 +129,20 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
 
             <div className="space-y-3">
               <h4 className="font-display text-sm font-semibold text-gold-dim">
-                Categories
+                Comparisons
               </h4>
               <div className="flex flex-col gap-2">
-                <Link href="/directory?tier=commercial" className="text-sm text-muted-foreground hover:text-foreground">
-                  Commercial APIs
+                <Link href="/compare/runway-vs-pika" className="text-sm text-muted-foreground hover:text-foreground">
+                  Runway vs Pika
                 </Link>
-                <Link href="/directory?tier=open-source" className="text-sm text-muted-foreground hover:text-foreground">
+                <Link href="/compare/runway-vs-kling" className="text-sm text-muted-foreground hover:text-foreground">
+                  Runway vs Kling
+                </Link>
+                <Link href="/compare/text-to-video-services" className="text-sm text-muted-foreground hover:text-foreground">
+                  Best Text-to-Video
+                </Link>
+                <Link href="/compare/open-source-video-models" className="text-sm text-muted-foreground hover:text-foreground">
                   Open Source Models
-                </Link>
-                <Link href="/directory?tier=infrastructure" className="text-sm text-muted-foreground hover:text-foreground">
-                  Infrastructure
                 </Link>
               </div>
             </div>

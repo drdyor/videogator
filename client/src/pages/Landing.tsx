@@ -1,6 +1,8 @@
 import { Link } from "wouter";
 import { VIDEO_SERVICES } from "@/data/services";
 import { GUIDES } from "@/data/guides";
+import { COMPARISONS } from "@/data/comparisons";
+import GatorMascot from "@/components/GatorMascot";
 import { ArrowRight, Layers, BookOpen, Palette, Zap, Shield, Globe } from "lucide-react";
 
 const featuredServices = VIDEO_SERVICES.filter((s) => s.tier === "commercial").slice(0, 6);
@@ -12,9 +14,11 @@ export default function Landing() {
       <section className="relative overflow-hidden py-24 md:py-36">
         <div className="absolute inset-0 bg-gradient-to-b from-burgundy/20 via-background to-background" />
         <div className="container relative z-10 text-center space-y-8">
+          <GatorMascot size="xl" variant="pulse" className="mx-auto mb-2" />
+
           <div className="inline-flex items-center gap-2 rounded-full border border-gold-dim/30 bg-gold/5 px-4 py-1.5 text-xs text-gold">
             <Zap className="w-3 h-3" />
-            15+ services compared — updated for 2025
+            18 services compared — see real examples, not marketing demos
           </div>
 
           <h1 className="font-display text-5xl md:text-7xl font-bold leading-tight">
@@ -208,6 +212,43 @@ export default function Landing() {
                   ))}
                 </div>
               </div>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      {/* Popular Comparisons */}
+      <section className="container py-20">
+        <div className="text-center mb-12">
+          <div className="art-deco-divider mb-6">
+            <span className="font-display text-sm tracking-widest uppercase text-gold-dim">
+              Compare
+            </span>
+          </div>
+          <h2 className="font-display text-3xl font-bold mb-3">
+            Popular Comparisons
+          </h2>
+          <p className="text-muted-foreground max-w-lg mx-auto">
+            Side-by-side breakdowns with real examples, pricing, and honest verdicts.
+          </p>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 max-w-4xl mx-auto">
+          {COMPARISONS.map((comp) => (
+            <Link
+              key={comp.slug}
+              href={`/compare/${comp.slug}`}
+              className="group rounded-lg border border-border/40 p-5 hover:border-gold-dim/40 transition-colors space-y-2"
+            >
+              <h3 className="font-display text-sm font-semibold group-hover:text-gold transition-colors">
+                {comp.title}
+              </h3>
+              <p className="text-xs text-muted-foreground line-clamp-2">
+                {comp.verdict}
+              </p>
+              <span className="inline-flex items-center gap-1 text-xs text-gold opacity-0 group-hover:opacity-100 transition-opacity">
+                Read comparison <ArrowRight className="w-3 h-3" />
+              </span>
             </Link>
           ))}
         </div>

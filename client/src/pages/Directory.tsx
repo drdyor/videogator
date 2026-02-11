@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { Link } from "wouter";
 import { VIDEO_SERVICES, CAPABILITY_FILTERS, TIER_LABELS, type VideoService } from "@/data/services";
 import { ExternalLink, Check, X, Filter, ArrowUpDown } from "lucide-react";
 
@@ -181,13 +182,13 @@ export default function Directory() {
               {filtered.map((s) => (
                 <tr key={s.id} className="border-b border-border/30 hover:bg-gold/5 transition-colors">
                   <td className="p-3">
-                    <div className="flex items-center gap-2">
+                    <Link href={`/service/${s.id}`} className="flex items-center gap-2 hover:text-gold transition-colors">
                       <span className="text-lg">{s.icon}</span>
                       <div>
                         <div className="font-medium">{s.name}</div>
                         <div className="text-xs text-muted-foreground line-clamp-1">{s.tagline}</div>
                       </div>
-                    </div>
+                    </Link>
                   </td>
                   <td className="p-3">
                     <span className={`text-xs rounded-full px-2 py-0.5 border ${
@@ -256,75 +257,69 @@ export default function Directory() {
 
 function ServiceCard({ service }: { service: VideoService }) {
   return (
-    <div className="art-deco-card rounded-lg p-6 space-y-4 hover-lift">
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-3">
-          <span className="text-3xl">{service.icon}</span>
-          <div>
-            <h3 className="font-semibold">{service.name}</h3>
-            <span className={`text-xs rounded-full px-2 py-0.5 border ${
-              service.tier === "commercial" ? "border-gold/30 text-gold" :
-              service.tier === "open-source" ? "border-green-500/30 text-green-400" :
-              "border-blue-500/30 text-blue-400"
-            }`}>
-              {service.tier}
-            </span>
+    <Link href={`/service/${service.id}`} className="block">
+      <div className="art-deco-card rounded-lg p-6 space-y-4 hover-lift">
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-3">
+            <span className="text-3xl">{service.icon}</span>
+            <div>
+              <h3 className="font-semibold">{service.name}</h3>
+              <span className={`text-xs rounded-full px-2 py-0.5 border ${
+                service.tier === "commercial" ? "border-gold/30 text-gold" :
+                service.tier === "open-source" ? "border-green-500/30 text-green-400" :
+                "border-blue-500/30 text-blue-400"
+              }`}>
+                {service.tier}
+              </span>
+            </div>
           </div>
         </div>
-        <a
-          href={service.website}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-muted-foreground hover:text-gold transition-colors"
-        >
-          <ExternalLink className="w-4 h-4" />
-        </a>
-      </div>
 
-      <p className="text-sm text-muted-foreground">{service.tagline}</p>
+        <p className="text-sm text-muted-foreground">{service.tagline}</p>
 
-      <div className="grid grid-cols-2 gap-2 text-xs">
-        <div>
-          <span className="text-muted-foreground/60">Resolution</span>
-          <div className="font-medium">{service.maxResolution}</div>
+        <div className="grid grid-cols-2 gap-2 text-xs">
+          <div>
+            <span className="text-muted-foreground/60">Resolution</span>
+            <div className="font-medium">{service.maxResolution}</div>
+          </div>
+          <div>
+            <span className="text-muted-foreground/60">Duration</span>
+            <div className="font-medium">{service.maxDuration}</div>
+          </div>
+          <div>
+            <span className="text-muted-foreground/60">API</span>
+            <div className="font-medium">{service.apiAvailable ? "Yes" : "No"}</div>
+          </div>
+          <div>
+            <span className="text-muted-foreground/60">Self-host</span>
+            <div className="font-medium">{service.selfHostable ? "Yes" : "No"}</div>
+          </div>
         </div>
-        <div>
-          <span className="text-muted-foreground/60">Duration</span>
-          <div className="font-medium">{service.maxDuration}</div>
+
+        <div className="flex flex-wrap gap-1.5">
+          {service.capabilities.slice(0, 4).map((cap) => (
+            <span
+              key={cap}
+              className="text-xs rounded-full border border-gold-dim/20 bg-gold/5 px-2 py-0.5 text-muted-foreground"
+            >
+              {cap}
+            </span>
+          ))}
+          {service.capabilities.length > 4 && (
+            <span className="text-xs text-muted-foreground/60">
+              +{service.capabilities.length - 4}
+            </span>
+          )}
         </div>
-        <div>
-          <span className="text-muted-foreground/60">API</span>
-          <div className="font-medium">{service.apiAvailable ? "Yes" : "No"}</div>
-        </div>
-        <div>
-          <span className="text-muted-foreground/60">Self-host</span>
-          <div className="font-medium">{service.selfHostable ? "Yes" : "No"}</div>
+
+        <div className="pt-2 border-t border-gold-dim/10">
+          <p className="text-xs text-gold">{service.pricing}</p>
+          {service.pricingDetail && (
+            <p className="text-xs text-muted-foreground/60 mt-0.5">{service.pricingDetail}</p>
+          )}
         </div>
       </div>
-
-      <div className="flex flex-wrap gap-1.5">
-        {service.capabilities.slice(0, 4).map((cap) => (
-          <span
-            key={cap}
-            className="text-xs rounded-full border border-gold-dim/20 bg-gold/5 px-2 py-0.5 text-muted-foreground"
-          >
-            {cap}
-          </span>
-        ))}
-        {service.capabilities.length > 4 && (
-          <span className="text-xs text-muted-foreground/60">
-            +{service.capabilities.length - 4}
-          </span>
-        )}
-      </div>
-
-      <div className="pt-2 border-t border-gold-dim/10">
-        <p className="text-xs text-gold">{service.pricing}</p>
-        {service.pricingDetail && (
-          <p className="text-xs text-muted-foreground/60 mt-0.5">{service.pricingDetail}</p>
-        )}
-      </div>
-    </div>
+    </Link>
   );
 }
 

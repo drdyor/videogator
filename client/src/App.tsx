@@ -6,6 +6,8 @@ import Landing from "@/pages/Landing";
 import Directory from "@/pages/Directory";
 import Guides from "@/pages/Guides";
 import Prompts from "@/pages/Prompts";
+import ServiceDetail from "@/pages/ServiceDetail";
+import Compare from "@/pages/Compare";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
@@ -138,6 +140,20 @@ function App() {
               {() => (
                 <PublicLayout>
                   <Prompts />
+                </PublicLayout>
+              )}
+            </Route>
+            <Route path="/service/:id">
+              {() => (
+                <PublicLayout>
+                  <ServiceDetail />
+                </PublicLayout>
+              )}
+            </Route>
+            <Route path="/compare/:slug">
+              {() => (
+                <PublicLayout>
+                  <Compare />
                 </PublicLayout>
               )}
             </Route>
