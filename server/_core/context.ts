@@ -19,11 +19,11 @@ export async function createContext(
 ): Promise<TrpcContext> {
   let user: User | null = null;
 
-  const authHeader = opts.req.headers.authorization;
+  const authHeader = (opts.req as any).headers?.authorization;
   if (authHeader?.startsWith("Bearer ")) {
     const token = authHeader.slice(7);
     try {
-      const { data, error } = await supabase.auth.getUser(token);
+      const { data, error } = await (supabase.auth as any).getUser(token);
       if (!error && data.user) {
         const supaUser = data.user;
         const openId = supaUser.id;
