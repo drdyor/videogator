@@ -4,10 +4,15 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  --font-serif: 'Playfair Display', Georgia, serif;
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  --color-gold: var(--gold);
+  --color-gold-dim: var(--gold-dim);
+  --color-burgundy: var(--burgundy);
+  --color-cream: var(--cream);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -43,6 +48,10 @@
 }
 
 :root {
+  --gold: oklch(0.78 0.12 75);
+  --gold-dim: oklch(0.55 0.10 75);
+  --burgundy: oklch(0.35 0.15 15);
+  --cream: oklch(0.92 0.02 85);
   --primary: oklch(0.623 0.214 259.815);
   --primary-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.623 0.214 259.815);
@@ -193,5 +202,56 @@
 
   .shadow-elegant-sm {
     @apply shadow-md shadow-black/10;
+  }
+
+  /* Art Deco utilities for public pages */
+  .font-display {
+    font-family: 'Playfair Display', Georgia, serif;
+  }
+
+  .art-deco-border {
+    border: 1px solid var(--gold-dim);
+    box-shadow: inset 0 0 0 3px var(--background), inset 0 0 0 4px var(--gold-dim);
+  }
+
+  .art-deco-divider {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    color: var(--gold-dim);
+  }
+  .art-deco-divider::before,
+  .art-deco-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--gold-dim), transparent);
+  }
+
+  .gold-gradient-text {
+    background: linear-gradient(135deg, var(--gold), var(--cream), var(--gold));
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .film-grain {
+    position: relative;
+  }
+  .film-grain::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    opacity: 0.03;
+    pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+    background-repeat: repeat;
+    background-size: 256px 256px;
+  }
+
+  .art-deco-card {
+    border: 1px solid var(--gold-dim);
+    border-top: 3px solid var(--gold);
+    background: var(--card);
   }
 }

@@ -5,7 +5,7 @@ export default function Home() {
   const [, setLocation] = useLocation();
 
   useEffect(() => {
-    setLocation("/dashboard");
+    setLocation("/");
   }, [setLocation]);
 
   return null;
