@@ -51,11 +51,14 @@ export default function Login() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md p-8 space-y-6">
-        <div className="text-center space-y-2">
-          <h1 className="text-3xl font-bold">VideoGator</h1>
-          <p className="text-muted-foreground">
-            {isSignUp ? "Create your account" : "Sign in to your account"}
-          </p>
+        <div className="text-center space-y-4">
+          <img src="/logo-small.png" alt="VideoGator" className="w-24 h-24 mx-auto" />
+          <div className="space-y-1">
+            <h1 className="text-3xl font-bold">VideoGator</h1>
+            <p className="text-muted-foreground">
+              {isSignUp ? "Create your account" : "Sign in to your account"}
+            </p>
+          </div>
         </div>
 
         <div className="space-y-3">
