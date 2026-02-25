@@ -9,6 +9,7 @@ import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Plus, Play, Trash2, Settings2, Server, CheckCircle2, XCircle } from "lucide-react";
 import { useMemo, useState } from "react";
+import GeneratingAnimation from "@/components/GeneratingAnimation";
 
 type VideoModel = "hunyuan-video" | "mochi" | "cogvideo" | "modelscope" | "stable-video-diffusion";
 
@@ -491,6 +492,15 @@ export default function VideoFoundry() {
           )}
         </div>
       </Card>
+
+      {/* Show animation when Processing */}
+      {jobId && (statusQuery.data as any)?.status === "processing" && (
+        <GeneratingAnimation
+          prompt={operations.find(op => op.type === "generate")?.params.prompt}
+          progress={50}
+          estimatedTime={60}
+        />
+      )}
 
       {jobId && (
         <Card className="p-6 space-y-3">
