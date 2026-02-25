@@ -35,9 +35,9 @@ export default function Landing() {
           </div>
 
           <h1 className="font-display text-4xl md:text-6xl font-bold leading-tight">
-            <span className="gold-gradient-text">Every AI Video Tool,</span>
+            <span className="gold-gradient-text">Video Generation,</span>
             <br />
-            <span className="text-foreground">One Place.</span>
+            <span className="text-foreground">One Byte at a Time.</span>
           </h1>
 
           <p className="mx-auto max-w-2xl text-lg text-muted-foreground">
