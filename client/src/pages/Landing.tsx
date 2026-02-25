@@ -22,8 +22,8 @@ export default function Landing() {
             playsInline
             className="w-full h-full object-cover object-[center_35%]"
           />
-          <div className="absolute inset-0 bg-background/40" />
-          <div className="absolute inset-0 bg-gradient-to-b from-background/20 via-background/40 to-background" />
+          <div className="absolute inset-0 bg-background/35" />
+          <div className="absolute inset-0 bg-gradient-to-b from-background/10 via-transparent to-background/60" />
         </div>
 
         <div className="container relative z-10 text-center space-y-5">
@@ -42,24 +42,23 @@ export default function Landing() {
             AI Video Generator Aggregator
           </p>
 
-          <p className="mx-auto max-w-2xl text-lg text-muted-foreground">
-            Compare commercial APIs, open-source models, and GPU infrastructure.
-            Learn to generate, prompt, self-host, and ship AI video — from first prompt to production.
+          <p className="mx-auto max-w-xl text-lg text-muted-foreground">
+            Compare 18+ AI video tools side-by-side. Generate videos with your own GPU. No cloud costs.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link
-              href="/directory"
+              href="/get-started"
               className="inline-flex items-center gap-2 rounded-md bg-gold px-6 py-3 text-base font-semibold text-background hover:bg-gold/90 transition-colors"
             >
-              Browse Directory
+              Start Generating
               <ArrowRight className="w-4 h-4" />
             </Link>
             <Link
-              href="/guides"
+              href="/directory"
               className="inline-flex items-center gap-2 rounded-md border border-gold-dim/40 bg-background/30 backdrop-blur-sm px-6 py-3 text-base font-medium text-foreground hover:border-gold-dim transition-colors"
             >
-              Read Guides
+              Compare Tools
             </Link>
           </div>
         </div>
