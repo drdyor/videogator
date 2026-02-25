@@ -102,10 +102,33 @@ function App() {
       return;
     }
 
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setLoading(false);
-    });
+    // Handle OAuth callback — exchange code for session if present in URL
+    const params = new URLSearchParams(window.location.search);
+    const hasAuthCode = params.has("code");
+    const hasHashToken = window.location.hash.includes("access_token");
+
+    if (hasAuthCode || hasHashToken) {
+      // Let Supabase exchange the code/token, then get the session
+      supabase.auth.exchangeCodeForSession(params.get("code") || "").then(() => {
+        return supabase.auth.getSession();
+      }).then(({ data }) => {
+        setSession(data.session);
+        setLoading(false);
+        // Clean up URL
+        window.history.replaceState({}, "", window.location.pathname);
+      }).catch(() => {
+        // If code exchange fails, try getSession directly (handles hash tokens)
+        supabase.auth.getSession().then(({ data }) => {
+          setSession(data.session);
+          setLoading(false);
+        });
+      });
+    } else {
+      supabase.auth.getSession().then(({ data }) => {
+        setSession(data.session);
+        setLoading(false);
+      });
+    }
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
