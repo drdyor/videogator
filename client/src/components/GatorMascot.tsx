@@ -23,12 +23,10 @@ export default function GatorMascot({
   if (variant === "framed") {
     return (
       <div className={`relative inline-flex items-center justify-center ${className}`}>
-        <div className="absolute inset-0 rounded-full border-2 border-gold/30 scale-125" />
-        <div className="absolute inset-0 rounded-full border border-gold-dim/20 scale-[1.4]" />
         <img
           src="/videogator-logo.png"
           alt="VideoGator"
-          className={`${sizeClass} relative z-10 drop-shadow-lg`}
+          className={`${sizeClass} relative z-10 drop-shadow-lg rounded-full`}
         />
       </div>
     );
@@ -38,11 +36,10 @@ export default function GatorMascot({
     return (
       <div className={`relative inline-flex items-center justify-center ${className}`}>
         <div className="absolute inset-0 rounded-full bg-gold/10 animate-ping scale-150 opacity-20" />
-        <div className="absolute inset-0 rounded-full border-2 border-gold/20 scale-125" />
         <img
           src="/videogator-logo.png"
           alt="VideoGator"
-          className={`${sizeClass} relative z-10 drop-shadow-lg`}
+          className={`${sizeClass} relative z-10 drop-shadow-lg rounded-full`}
         />
       </div>
     );
