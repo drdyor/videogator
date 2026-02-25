@@ -20,15 +20,13 @@ export default function Landing() {
             muted
             loop
             playsInline
-            className="w-full h-full object-cover"
+            className="w-full h-full object-cover object-bottom"
           />
           <div className="absolute inset-0 bg-background/40" />
           <div className="absolute inset-0 bg-gradient-to-b from-background/20 via-background/40 to-background" />
         </div>
 
         <div className="container relative z-10 text-center space-y-5">
-          <GatorMascot size="lg" variant="pulse" className="mx-auto" />
-
           <div className="inline-flex items-center gap-2 rounded-full border border-gold-dim/30 bg-gold/5 px-4 py-1.5 text-xs text-gold backdrop-blur-sm">
             <Zap className="w-3 h-3" />
             18 services compared — see real examples, not marketing demos

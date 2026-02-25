@@ -17,7 +17,7 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
       <header className="sticky top-0 z-50 border-b border-gold-dim/30 bg-background/90 backdrop-blur-md">
         <nav className="container flex items-center justify-between h-16">
           <Link href="/" className="flex items-center gap-2.5 group">
-            <img src="/videogator-logo.png" alt="VideoGator" className="w-8 h-8" />
+            <Film className="w-7 h-7 text-gold" />
             <span className="font-display text-xl font-bold gold-gradient-text">
               VideoGator
             </span>
