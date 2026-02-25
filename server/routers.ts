@@ -116,14 +116,14 @@ export const appRouter = router({
   video: router({
     create: protectedProcedure.input(z.object({
       operations: z.array(z.any()),
-      inputUrl: z.string().url(),
+      inputUrl: z.string().optional(),
     })).mutation(async ({ ctx, input }) => {
       const jobId = crypto.randomUUID();
       await db.createJob({
         id: jobId,
         userId: ctx.user.id,
         status: "queued",
-        inputUrl: input.inputUrl,
+        inputUrl: input.inputUrl ?? "",
         operations: JSON.stringify(input.operations),
         currentStep: 0,
       });
@@ -139,7 +139,7 @@ export const appRouter = router({
         jobId,
         operations: input.operations,
         userId: ctx.user.id,
-        inputUrl: input.inputUrl,
+        inputUrl: input.inputUrl ?? "",
       });
 
       return { jobId, status: "queued" as const };
@@ -156,6 +156,88 @@ export const appRouter = router({
       }
       await setJobStatusCache(input.jobId, job);
       return job;
+    }),
+
+    // Direct generation endpoint (bypasses queue for local server)
+    generate: protectedProcedure.input(z.object({
+      prompt: z.string(),
+      negativePrompt: z.string().optional(),
+      model: z.enum(["hunyuan-video", "mochi", "cogvideo", "modelscope", "stable-video-diffusion"]).optional(),
+      width: z.number().optional(),
+      height: z.number().optional(),
+      numFrames: z.number().optional(),
+      numInferenceSteps: z.number().optional(),
+      guidanceScale: z.number().optional(),
+      seed: z.number().optional(),
+      fps: z.number().optional(),
+      imageUrl: z.string().optional(),
+    })).mutation(async ({ input }) => {
+      const VIDEO_SERVER_URL = process.env.VIDEO_SERVER_URL;
+      if (!VIDEO_SERVER_URL) {
+        throw new TRPCError({ 
+          code: "PRECONDITION_FAILED", 
+          message: "VIDEO_SERVER_URL is not configured. Please set up the local video server." 
+        });
+      }
+
+      try {
+        const response = await fetch(`${VIDEO_SERVER_URL}/generate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            prompt: input.prompt,
+            negative_prompt: input.negativePrompt ?? "",
+            model: input.model ?? "hunyuan-video",
+            width: input.width ?? 848,
+            height: input.height ?? 480,
+            num_frames: input.numFrames ?? 65,
+            num_inference_steps: input.numInferenceSteps ?? 30,
+            guidance_scale: input.guidanceScale ?? 7.0,
+            seed: input.seed,
+            fps: input.fps ?? 24,
+            image_url: input.imageUrl,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Video server error: ${response.statusText}`);
+        }
+
+        const data = await response.json() as { job_id: string; status: string };
+        return { jobId: data.job_id, status: data.status };
+      } catch (error) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: error instanceof Error ? error.message : "Failed to connect to video server",
+        });
+      }
+    }),
+
+    // Check video server health
+    serverHealth: protectedProcedure.query(async () => {
+      const VIDEO_SERVER_URL = process.env.VIDEO_SERVER_URL;
+      if (!VIDEO_SERVER_URL) {
+        return { 
+          available: false, 
+          error: "VIDEO_SERVER_URL not configured" 
+        };
+      }
+
+      try {
+        const response = await fetch(`${VIDEO_SERVER_URL}/health`, {
+          signal: AbortSignal.timeout(5000),
+        });
+        const data = await response.json() as Record<string, unknown>;
+        return { 
+          available: true, 
+          ...data 
+        };
+      } catch (error) {
+        return { 
+          available: false, 
+          error: error instanceof Error ? error.message : "Failed to connect" 
+        };
+      }
     }),
   }),
 
@@ -332,6 +414,143 @@ export const appRouter = router({
         });
         return { success: true };
       }),
+    }),
+  }),
+
+  // Video gallery and management
+  videos: router({
+    list: protectedProcedure.input(z.object({
+      limit: z.number().int().min(1).max(100).optional(),
+      offset: z.number().int().min(0).optional(),
+    }).optional()).query(async ({ ctx, input }) => {
+      const limit = input?.limit ?? 50;
+      const offset = input?.offset ?? 0;
+      const videos = await db.getUserVideos(ctx.user.id, limit, offset);
+      const count = await db.getUserVideoCount(ctx.user.id);
+      return { videos, total: count };
+    }),
+    
+    get: protectedProcedure.input(z.object({ id: z.number() })).query(async ({ input }) => {
+      const video = await db.getVideoById(input.id);
+      if (!video) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Video not found" });
+      }
+      return video;
+    }),
+    
+    delete: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ ctx, input }) => {
+      const video = await db.getVideoById(input.id);
+      if (!video) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Video not found" });
+      }
+      if (video.userId !== ctx.user.id) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Not authorized to delete this video" });
+      }
+      await db.deleteVideo(input.id);
+      return { success: true };
+    }),
+    
+    update: protectedProcedure.input(z.object({
+      id: z.number(),
+      isPublic: z.boolean().optional(),
+    })).mutation(async ({ ctx, input }) => {
+      const video = await db.getVideoById(input.id);
+      if (!video) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Video not found" });
+      }
+      if (video.userId !== ctx.user.id) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Not authorized to update this video" });
+      }
+      await db.updateVideo(input.id, {
+        isPublic: input.isPublic ? 1 : 0,
+      });
+      return { success: true };
+    }),
+    
+    public: publicProcedure.input(z.object({
+      limit: z.number().int().min(1).max(100).optional(),
+    }).optional()).query(async ({ input }) => {
+      const limit = input?.limit ?? 20;
+      return db.getPublicVideos(limit);
+    }),
+  }),
+
+  // Saved prompts library
+  prompts: router({
+    list: protectedProcedure.query(async ({ ctx }) => {
+      return db.getUserSavedPrompts(ctx.user.id);
+    }),
+    
+    get: protectedProcedure.input(z.object({ id: z.number() })).query(async ({ input }) => {
+      const prompt = await db.getSavedPromptById(input.id);
+      if (!prompt) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Prompt not found" });
+      }
+      return prompt;
+    }),
+    
+    create: protectedProcedure.input(z.object({
+      name: z.string().min(1),
+      prompt: z.string().min(1),
+      negativePrompt: z.string().optional(),
+      model: z.string().optional(),
+      settings: z.string().optional(),
+    })).mutation(async ({ ctx, input }) => {
+      const saved = await db.createSavedPrompt({
+        userId: ctx.user.id,
+        name: input.name,
+        prompt: input.prompt,
+        negativePrompt: input.negativePrompt,
+        model: input.model,
+        settings: input.settings,
+        isFavorite: 0,
+        useCount: 0,
+      });
+      return saved;
+    }),
+    
+    update: protectedProcedure.input(z.object({
+      id: z.number(),
+      name: z.string().optional(),
+      prompt: z.string().optional(),
+      negativePrompt: z.string().optional(),
+      model: z.string().optional(),
+      settings: z.string().optional(),
+      isFavorite: z.boolean().optional(),
+    })).mutation(async ({ ctx, input }) => {
+      const prompt = await db.getSavedPromptById(input.id);
+      if (!prompt) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Prompt not found" });
+      }
+      if (prompt.userId !== ctx.user.id) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Not authorized" });
+      }
+      await db.updateSavedPrompt(input.id, {
+        name: input.name,
+        prompt: input.prompt,
+        negativePrompt: input.negativePrompt,
+        model: input.model,
+        settings: input.settings,
+        isFavorite: input.isFavorite ? 1 : 0,
+      });
+      return { success: true };
+    }),
+    
+    delete: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ ctx, input }) => {
+      const prompt = await db.getSavedPromptById(input.id);
+      if (!prompt) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Prompt not found" });
+      }
+      if (prompt.userId !== ctx.user.id) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Not authorized" });
+      }
+      await db.deleteSavedPrompt(input.id);
+      return { success: true };
+    }),
+    
+    use: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ input }) => {
+      await db.incrementPromptUseCount(input.id);
+      return { success: true };
     }),
   }),
 });

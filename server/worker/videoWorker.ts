@@ -23,8 +23,14 @@ const r2 = new S3Client({
 
 const FFMPEG_SERVER_URL = process.env.FFMPEG_SERVER_URL ?? "";
 const COMFYUI_URL = process.env.COMFYUI_URL ?? "";
+const VIDEO_SERVER_URL = process.env.VIDEO_SERVER_URL ?? ""; // Local GPU video server
 const R2_BUCKET = process.env.R2_BUCKET ?? "";
 const R2_PUBLIC_URL = process.env.R2_PUBLIC_URL ?? "";
+
+// Video model configuration
+type VideoModel = "hunyuan-video" | "mochi" | "cogvideo" | "modelscope" | "stable-video-diffusion";
+
+const DEFAULT_VIDEO_MODEL: VideoModel = (process.env.DEFAULT_VIDEO_MODEL as VideoModel) ?? "hunyuan-video";
 
 type Operation = {
   type: "edit" | "generate";
@@ -111,17 +117,117 @@ async function processFFmpeg(inputUrl: string, action: string, params: Record<st
   return { url: response.data.url as string };
 }
 
-async function processGeneration(_inputUrl: string, op: Operation, jobId: string) {
-  if (!COMFYUI_URL) {
-    throw new Error("COMFYUI_URL is not configured");
+async function processGeneration(inputUrl: string, op: Operation, jobId: string) {
+  const prompt = typeof op.params?.prompt === "string" ? op.params.prompt : "";
+  const negativePrompt =
+    typeof op.params?.negativePrompt === "string" ? op.params.negativePrompt : "";
+  const model = (typeof op.params?.model === "string" ? op.params.model : DEFAULT_VIDEO_MODEL) as VideoModel;
+  const width = typeof op.params?.width === "number" ? op.params.width : 848;
+  const height = typeof op.params?.height === "number" ? op.params.height : 480;
+  const numFrames = typeof op.params?.numFrames === "number" ? op.params.numFrames : 65;
+  const numInferenceSteps = typeof op.params?.numInferenceSteps === "number" ? op.params.numInferenceSteps : 30;
+  const guidanceScale = typeof op.params?.guidanceScale === "number" ? op.params.guidanceScale : 7.0;
+  const seed = typeof op.params?.seed === "number" ? op.params.seed : Math.floor(Math.random() * 1_000_000);
+  const fps = typeof op.params?.fps === "number" ? op.params.fps : 24;
+
+  // Prefer local video server if configured
+  if (VIDEO_SERVER_URL) {
+    return processLocalGeneration({
+      prompt,
+      negativePrompt,
+      model,
+      width,
+      height,
+      numFrames,
+      numInferenceSteps,
+      guidanceScale,
+      seed,
+      fps,
+      imageUrl: inputUrl || undefined,
+    }, jobId);
   }
+
+  // Fallback to ComfyUI
+  return processComfyUIGeneration(prompt, negativePrompt, jobId);
+}
+
+async function processLocalGeneration(params: {
+  prompt: string;
+  negativePrompt: string;
+  model: VideoModel;
+  width: number;
+  height: number;
+  numFrames: number;
+  numInferenceSteps: number;
+  guidanceScale: number;
+  seed: number;
+  fps: number;
+  imageUrl?: string;
+}, jobId: string) {
   if (!R2_BUCKET || !R2_PUBLIC_URL) {
     throw new Error("R2 storage is not configured");
   }
 
-  const prompt = typeof op.params?.prompt === "string" ? op.params.prompt : "";
-  const negativePrompt =
-    typeof op.params?.negativePrompt === "string" ? op.params.negativePrompt : "";
+  // Start generation job
+  const generateRes = await axios.post(`${VIDEO_SERVER_URL}/generate`, {
+    prompt: params.prompt,
+    negative_prompt: params.negativePrompt,
+    model: params.model,
+    width: params.width,
+    height: params.height,
+    num_frames: params.numFrames,
+    num_inference_steps: params.numInferenceSteps,
+    guidance_scale: params.guidanceScale,
+    seed: params.seed,
+    fps: params.fps,
+    image_url: params.imageUrl,
+  }, { timeout: 30_000 });
+
+  const videoJobId = generateRes.data.job_id as string;
+  const startTime = Date.now();
+
+  // Poll for completion
+  while (Date.now() - startTime < 600_000) {
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    
+    const statusRes = await axios.get(`${VIDEO_SERVER_URL}/status/${videoJobId}`);
+    const status = statusRes.data;
+
+    if (status.status === "completed" && status.output_url) {
+      // Download the video
+      const videoRes = await axios.get(
+        `${VIDEO_SERVER_URL}${status.output_url}`,
+        { responseType: "arraybuffer" }
+      );
+
+      const key = `generated/${Date.now()}-${videoJobId}.mp4`;
+      await r2.send(
+        new PutObjectCommand({
+          Bucket: R2_BUCKET,
+          Key: key,
+          Body: videoRes.data,
+          ContentType: "video/mp4",
+        })
+      );
+
+      return { url: `${R2_PUBLIC_URL}/${key}` };
+    }
+
+    if (status.status === "failed") {
+      throw new Error(status.error || "Video generation failed");
+    }
+  }
+
+  throw new Error("Generation timeout after 10 minutes");
+}
+
+async function processComfyUIGeneration(prompt: string, negativePrompt: string, jobId: string) {
+  if (!COMFYUI_URL) {
+    throw new Error("COMFYUI_URL is not configured and VIDEO_SERVER_URL is not set");
+  }
+  if (!R2_BUCKET || !R2_PUBLIC_URL) {
+    throw new Error("R2 storage is not configured");
+  }
 
   const workflow = {
     "1": {

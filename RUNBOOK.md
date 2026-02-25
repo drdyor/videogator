@@ -31,6 +31,12 @@ COMFYUI_URL=http://your-comfyui-host:8188
 MASTER_SECRET=your-32-char-secret
 ```
 
+**Local Video Generation (GPU):**
+```
+VIDEO_SERVER_URL=http://your-gpu-machine:8001
+DEFAULT_VIDEO_MODEL=hunyuan-video
+```
+
 Storage for generated videos:
 ```
 R2_ENDPOINT=https://<account>.r2.cloudflarestorage.com
@@ -74,6 +80,22 @@ Server should be at: `http://localhost:3000`
 ```bash
 pnpm worker
 ```
+
+### 4c) Start the local video server (on GPU machine)
+**Windows:**
+```cmd
+cd video-server
+start.bat
+```
+
+**Linux/macOS:**
+```bash
+cd video-server
+chmod +x start.sh
+./start.sh
+```
+
+The video server runs on port 8001 by default.
 
 ### 5) Admin access
 Only users with `role = admin` can access `/admin`.

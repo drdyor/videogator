@@ -1,0 +1,642 @@
+"""
+Local Video Generation Server
+Supports: Ollama (LLM), HunyuanVideo, Mochi, CogVideo, ModelScope, AnimateDiff
+"""
+
+import os
+import json
+import asyncio
+import logging
+import tempfile
+import time
+from pathlib import Path
+from typing import Optional, Dict, Any, List
+from dataclasses import dataclass
+from enum import Enum
+
+import torch
+from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi.responses import FileResponse, JSONResponse
+from pydantic import BaseModel, Field
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+app = FastAPI(title="Local Video Generation Server", version="1.0.0")
+
+# Configuration
+OUTPUT_DIR = Path(os.getenv("OUTPUT_DIR", "/tmp/video-output"))
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+# Check for GPU
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+logger.info(f"Using device: {DEVICE}")
+if DEVICE == "cuda":
+    logger.info(f"GPU: {torch.cuda.get_device_name(0)}")
+    logger.info(f"VRAM: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB")
+
+
+class VideoModel(str, Enum):
+    HUNYUAN_VIDEO = "hunyuan-video"
+    MOCHI = "mochi"
+    COGVIDEO = "cogvideo"
+    MODELSCOPE = "modelscope"
+    ANIMATEDIFF = "animatediff"
+    SVS = "stable-video-diffusion"
+
+
+class GenerateRequest(BaseModel):
+    prompt: str = Field(..., description="Text prompt for video generation")
+    negative_prompt: str = Field(default="", description="Negative prompt")
+    model: VideoModel = Field(default=VideoModel.HUNYUAN_VIDEO, description="Video model to use")
+    width: int = Field(default=848, ge=256, le=1920)
+    height: int = Field(default=480, ge=256, le=1080)
+    num_frames: int = Field(default=65, ge=9, le=257)
+    num_inference_steps: int = Field(default=30, ge=1, le=100)
+    guidance_scale: float = Field(default=7.0, ge=1.0, le=20.0)
+    seed: Optional[int] = Field(default=None, description="Random seed for reproducibility")
+    fps: int = Field(default=24, ge=1, le=60)
+    
+    # Image-to-video specific
+    image_url: Optional[str] = Field(default=None, description="Input image URL for image-to-video")
+    image_base64: Optional[str] = Field(default=None, description="Input image base64 for image-to-video")
+
+
+class GenerateResponse(BaseModel):
+    job_id: str
+    status: str
+    message: str
+
+
+class StatusResponse(BaseModel):
+    job_id: str
+    status: str
+    progress: float
+    output_url: Optional[str] = None
+    error: Optional[str] = None
+
+
+# Job storage (in production, use Redis or database)
+jobs: Dict[str, Dict[str, Any]] = {}
+
+
+@dataclass
+class ModelConfig:
+    name: str
+    repo_id: str
+    default_width: int
+    default_height: int
+    default_frames: int
+    supports_image_to_video: bool
+
+
+MODEL_CONFIGS = {
+    VideoModel.HUNYUAN_VIDEO: ModelConfig(
+        name="HunyuanVideo",
+        repo_id="tencent/HunyuanVideo",
+        default_width=848,
+        default_height=480,
+        default_frames=65,
+        supports_image_to_video=False,
+    ),
+    VideoModel.MOCHI: ModelConfig(
+        name="Mochi",
+        repo_id="genmo/mochi-1-preview",
+        default_width=848,
+        default_height=480,
+        default_frames=65,
+        supports_image_to_video=False,
+    ),
+    VideoModel.COGVIDEO: ModelConfig(
+        name="CogVideoX",
+        repo_id="THUDM/CogVideoX-5b",
+        default_width=720,
+        default_height=480,
+        default_frames=49,
+        supports_image_to_video=True,
+    ),
+    VideoModel.MODELSCOPE: ModelConfig(
+        name="ModelScope",
+        repo_id="damo-vilab/text-to-video-ms-1.7b",
+        default_width=256,
+        default_height=256,
+        default_frames=16,
+        supports_image_to_video=False,
+    ),
+    VideoModel.ANIMATEDIFF: ModelConfig(
+        name="AnimateDiff",
+        repo_id="guoyww/animatediff",
+        default_width=512,
+        default_height=512,
+        default_frames=16,
+        supports_image_to_video=False,
+    ),
+    VideoModel.SVS: ModelConfig(
+        name="Stable Video Diffusion",
+        repo_id="stabilityai/stable-video-diffusion-img2vid-xt",
+        default_width=1024,
+        default_height=576,
+        default_frames=25,
+        supports_image_to_video=True,
+    ),
+}
+
+
+class VideoGenerator:
+    """Base class for video generation"""
+    
+    def __init__(self, model: VideoModel):
+        self.model = model
+        self.config = MODEL_CONFIGS[model]
+        self.pipeline = None
+    
+    def load_model(self):
+        """Load the model into memory"""
+        raise NotImplementedError
+    
+    def generate(self, request: GenerateRequest, output_path: Path) -> Path:
+        """Generate video and return path"""
+        raise NotImplementedError
+
+
+class HunyuanVideoGenerator(VideoGenerator):
+    """HunyuanVideo generator"""
+    
+    def load_model(self):
+        if self.pipeline is not None:
+            return
+        
+        try:
+            from diffusers import HunyuanVideoPipeline, HunyuanVideoTransformer3DModel
+            from diffusers.utils import export_to_video
+            
+            logger.info(f"Loading {self.config.name} model...")
+            
+            # Load with float16 for memory efficiency
+            dtype = torch.float16 if DEVICE == "cuda" else torch.float32
+            
+            self.pipeline = HunyuanVideoPipeline.from_pretrained(
+                self.config.repo_id,
+                torch_dtype=dtype,
+            )
+            self.pipeline.to(DEVICE)
+            self.pipeline.enable_model_cpu_offload()  # For limited VRAM
+            
+            logger.info(f"{self.config.name} loaded successfully")
+        except Exception as e:
+            logger.error(f"Failed to load {self.config.name}: {e}")
+            raise
+    
+    def generate(self, request: GenerateRequest, output_path: Path) -> Path:
+        from diffusers.utils import export_to_video
+        
+        self.load_model()
+        
+        generator = torch.Generator(device=DEVICE)
+        if request.seed is not None:
+            generator.manual_seed(request.seed)
+        
+        logger.info(f"Generating video with prompt: {request.prompt[:100]}...")
+        
+        result = self.pipeline(
+            prompt=request.prompt,
+            negative_prompt=request.negative_prompt,
+            height=request.height,
+            width=request.width,
+            num_frames=request.num_frames,
+            num_inference_steps=request.num_inference_steps,
+            guidance_scale=request.guidance_scale,
+            generator=generator,
+        )
+        
+        video_path = output_path.with_suffix(".mp4")
+        export_to_video(result.frames[0], str(video_path), fps=request.fps)
+        
+        return video_path
+
+
+class MochiGenerator(VideoGenerator):
+    """Mochi video generator"""
+    
+    def load_model(self):
+        if self.pipeline is not None:
+            return
+        
+        try:
+            from diffusers import MochiPipeline
+            
+            logger.info(f"Loading {self.config.name} model...")
+            
+            dtype = torch.float16 if DEVICE == "cuda" else torch.float32
+            
+            self.pipeline = MochiPipeline.from_pretrained(
+                self.config.repo_id,
+                torch_dtype=dtype,
+            )
+            self.pipeline.to(DEVICE)
+            
+            # Enable memory optimizations
+            self.pipeline.enable_model_cpu_offload()
+            
+            logger.info(f"{self.config.name} loaded successfully")
+        except Exception as e:
+            logger.error(f"Failed to load {self.config.name}: {e}")
+            raise
+    
+    def generate(self, request: GenerateRequest, output_path: Path) -> Path:
+        from diffusers.utils import export_to_video
+        
+        self.load_model()
+        
+        generator = torch.Generator(device=DEVICE)
+        if request.seed is not None:
+            generator.manual_seed(request.seed)
+        
+        logger.info(f"Generating video with Mochi: {request.prompt[:100]}...")
+        
+        result = self.pipeline(
+            prompt=request.prompt,
+            negative_prompt=request.negative_prompt,
+            height=request.height,
+            width=request.width,
+            num_frames=request.num_frames,
+            num_inference_steps=request.num_inference_steps,
+            guidance_scale=request.guidance_scale,
+            generator=generator,
+        )
+        
+        video_path = output_path.with_suffix(".mp4")
+        export_to_video(result.frames[0], str(video_path), fps=request.fps)
+        
+        return video_path
+
+
+class CogVideoGenerator(VideoGenerator):
+    """CogVideoX generator"""
+    
+    def load_model(self):
+        if self.pipeline is not None:
+            return
+        
+        try:
+            from diffusers import CogVideoXPipeline
+            
+            logger.info(f"Loading {self.config.name} model...")
+            
+            dtype = torch.float16 if DEVICE == "cuda" else torch.float32
+            
+            self.pipeline = CogVideoXPipeline.from_pretrained(
+                self.config.repo_id,
+                torch_dtype=dtype,
+            )
+            self.pipeline.to(DEVICE)
+            self.pipeline.enable_model_cpu_offload()
+            
+            logger.info(f"{self.config.name} loaded successfully")
+        except Exception as e:
+            logger.error(f"Failed to load {self.config.name}: {e}")
+            raise
+    
+    def generate(self, request: GenerateRequest, output_path: Path) -> Path:
+        from diffusers.utils import export_to_video
+        
+        self.load_model()
+        
+        generator = torch.Generator(device=DEVICE)
+        if request.seed is not None:
+            generator.manual_seed(request.seed)
+        
+        logger.info(f"Generating video with CogVideoX: {request.prompt[:100]}...")
+        
+        result = self.pipeline(
+            prompt=request.prompt,
+            negative_prompt=request.negative_prompt,
+            height=request.height,
+            width=request.width,
+            num_frames=request.num_frames,
+            num_inference_steps=request.num_inference_steps,
+            guidance_scale=request.guidance_scale,
+            generator=generator,
+        )
+        
+        video_path = output_path.with_suffix(".mp4")
+        export_to_video(result.frames[0], str(video_path), fps=request.fps)
+        
+        return video_path
+
+
+class ModelScopeGenerator(VideoGenerator):
+    """ModelScope text-to-video generator"""
+    
+    def load_model(self):
+        if self.pipeline is not None:
+            return
+        
+        try:
+            from diffusers import DiffusionPipeline
+            
+            logger.info(f"Loading {self.config.name} model...")
+            
+            dtype = torch.float16 if DEVICE == "cuda" else torch.float32
+            
+            self.pipeline = DiffusionPipeline.from_pretrained(
+                self.config.repo_id,
+                torch_dtype=dtype,
+            )
+            self.pipeline.to(DEVICE)
+            
+            logger.info(f"{self.config.name} loaded successfully")
+        except Exception as e:
+            logger.error(f"Failed to load {self.config.name}: {e}")
+            raise
+    
+    def generate(self, request: GenerateRequest, output_path: Path) -> Path:
+        from diffusers.utils import export_to_video
+        
+        self.load_model()
+        
+        generator = torch.Generator(device=DEVICE)
+        if request.seed is not None:
+            generator.manual_seed(request.seed)
+        
+        logger.info(f"Generating video with ModelScope: {request.prompt[:100]}...")
+        
+        result = self.pipeline(
+            prompt=request.prompt,
+            negative_prompt=request.negative_prompt,
+            height=request.height,
+            width=request.width,
+            num_frames=request.num_frames,
+            num_inference_steps=request.num_inference_steps,
+            guidance_scale=request.guidance_scale,
+            generator=generator,
+        )
+        
+        video_path = output_path.with_suffix(".mp4")
+        export_to_video(result.frames[0], str(video_path), fps=request.fps)
+        
+        return video_path
+
+
+class StableVideoDiffusionGenerator(VideoGenerator):
+    """Stable Video Diffusion image-to-video generator"""
+    
+    def load_model(self):
+        if self.pipeline is not None:
+            return
+        
+        try:
+            from diffusers import StableVideoDiffusionPipeline
+            
+            logger.info(f"Loading {self.config.name} model...")
+            
+            dtype = torch.float16 if DEVICE == "cuda" else torch.float32
+            
+            self.pipeline = StableVideoDiffusionPipeline.from_pretrained(
+                self.config.repo_id,
+                torch_dtype=dtype,
+            )
+            self.pipeline.to(DEVICE)
+            
+            logger.info(f"{self.config.name} loaded successfully")
+        except Exception as e:
+            logger.error(f"Failed to load {self.config.name}: {e}")
+            raise
+    
+    def generate(self, request: GenerateRequest, output_path: Path) -> Path:
+        import base64
+        import io
+        from PIL import Image
+        from diffusers.utils import export_to_video, load_image
+        
+        self.load_model()
+        
+        # Load input image
+        if request.image_url:
+            image = load_image(request.image_url)
+        elif request.image_base64:
+            image_data = base64.b64decode(request.image_base64)
+            image = Image.open(io.BytesIO(image_data))
+        else:
+            raise ValueError("Stable Video Diffusion requires an input image")
+        
+        # Resize to supported dimensions
+        image = image.resize((request.width, request.height))
+        
+        generator = torch.Generator(device=DEVICE)
+        if request.seed is not None:
+            generator.manual_seed(request.seed)
+        
+        logger.info(f"Generating video with SVD from image...")
+        
+        frames = self.pipeline(
+            image,
+            num_frames=request.num_frames,
+            num_inference_steps=request.num_inference_steps,
+            generator=generator,
+        ).frames[0]
+        
+        video_path = output_path.with_suffix(".mp4")
+        export_to_video(frames, str(video_path), fps=request.fps)
+        
+        return video_path
+
+
+# Generator factory
+def get_generator(model: VideoModel) -> VideoGenerator:
+    generators = {
+        VideoModel.HUNYUAN_VIDEO: HunyuanVideoGenerator,
+        VideoModel.MOCHI: MochiGenerator,
+        VideoModel.COGVIDEO: CogVideoGenerator,
+        VideoModel.MODELSCOPE: ModelScopeGenerator,
+        VideoModel.SVS: StableVideoDiffusionGenerator,
+    }
+    
+    generator_class = generators.get(model)
+    if generator_class is None:
+        raise ValueError(f"Unsupported model: {model}")
+    
+    return generator_class(model)
+
+
+async def generate_video_task(job_id: str, request: GenerateRequest):
+    """Background task for video generation"""
+    try:
+        jobs[job_id]["status"] = "processing"
+        jobs[job_id]["progress"] = 0.0
+        
+        output_path = OUTPUT_DIR / f"{job_id}"
+        generator = get_generator(request.model)
+        
+        # Run generation in thread pool
+        loop = asyncio.get_event_loop()
+        video_path = await loop.run_in_executor(
+            None,
+            lambda: generator.generate(request, output_path)
+        )
+        
+        jobs[job_id]["status"] = "completed"
+        jobs[job_id]["progress"] = 1.0
+        jobs[job_id]["output_url"] = f"/output/{video_path.name}"
+        
+        logger.info(f"Job {job_id} completed: {video_path}")
+        
+    except Exception as e:
+        logger.error(f"Job {job_id} failed: {e}")
+        jobs[job_id]["status"] = "failed"
+        jobs[job_id]["error"] = str(e)
+
+
+@app.get("/")
+async def root():
+    return {
+        "message": "Local Video Generation Server",
+        "device": DEVICE,
+        "gpu": torch.cuda.get_device_name(0) if DEVICE == "cuda" else None,
+        "models": [m.value for m in VideoModel],
+    }
+
+
+@app.get("/health")
+async def health():
+    return {
+        "status": "healthy",
+        "device": DEVICE,
+        "gpu_available": torch.cuda.is_available(),
+        "vram_gb": torch.cuda.get_device_properties(0).total_memory / 1e9 if DEVICE == "cuda" else 0,
+    }
+
+
+@app.post("/generate", response_model=GenerateResponse)
+async def generate(request: GenerateRequest, background_tasks: BackgroundTasks):
+    """Start video generation job"""
+    import uuid
+    
+    job_id = str(uuid.uuid4())[:8]
+    jobs[job_id] = {
+        "status": "queued",
+        "progress": 0.0,
+        "request": request.dict(),
+        "created_at": time.time(),
+    }
+    
+    background_tasks.add_task(generate_video_task, job_id, request)
+    
+    return GenerateResponse(
+        job_id=job_id,
+        status="queued",
+        message=f"Video generation started with {request.model.value}",
+    )
+
+
+@app.get("/status/{job_id}", response_model=StatusResponse)
+async def get_status(job_id: str):
+    """Get job status"""
+    if job_id not in jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    job = jobs[job_id]
+    return StatusResponse(
+        job_id=job_id,
+        status=job["status"],
+        progress=job["progress"],
+        output_url=job.get("output_url"),
+        error=job.get("error"),
+    )
+
+
+@app.get("/output/{filename}")
+async def get_output(filename: str):
+    """Download generated video"""
+    file_path = OUTPUT_DIR / filename
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    return FileResponse(
+        file_path,
+        media_type="video/mp4",
+        filename=filename,
+    )
+
+
+@app.get("/models")
+async def list_models():
+    """List available models and their configurations"""
+    return {
+        model.value: {
+            "name": config.name,
+            "repo_id": config.repo_id,
+            "default_width": config.default_width,
+            "default_height": config.default_height,
+            "default_frames": config.default_frames,
+            "supports_image_to_video": config.supports_image_to_video,
+        }
+        for model, config in MODEL_CONFIGS.items()
+    }
+
+
+@app.post("/ollama/generate")
+async def ollama_generate(request: dict):
+    """
+    Ollama-compatible endpoint for video generation.
+    Works with Ollama API format for easy integration.
+    """
+    model = request.get("model", "hunyuan-video")
+    prompt = request.get("prompt", "")
+    
+    # Map Ollama model names to our models
+    model_mapping = {
+        "hunyuan": VideoModel.HUNYUAN_VIDEO,
+        "hunyuan-video": VideoModel.HUNYUAN_VIDEO,
+        "mochi": VideoModel.MOCHI,
+        "cogvideo": VideoModel.COGVIDEO,
+        "cogvideox": VideoModel.COGVIDEO,
+        "modelscope": VideoModel.MODELSCOPE,
+        "svd": VideoModel.SVS,
+        "stable-video": VideoModel.SVS,
+    }
+    
+    video_model = model_mapping.get(model.lower(), VideoModel.HUNYUAN_VIDEO)
+    
+    generate_request = GenerateRequest(
+        prompt=prompt,
+        model=video_model,
+        **{k: v for k, v in request.items() if k in GenerateRequest.__fields__},
+    )
+    
+    import uuid
+    job_id = str(uuid.uuid4())[:8]
+    jobs[job_id] = {
+        "status": "queued",
+        "progress": 0.0,
+        "request": generate_request.dict(),
+        "created_at": time.time(),
+    }
+    
+    # Run synchronously for Ollama compatibility
+    try:
+        output_path = OUTPUT_DIR / f"{job_id}"
+        generator = get_generator(video_model)
+        video_path = generator.generate(generate_request, output_path)
+        
+        jobs[job_id]["status"] = "completed"
+        jobs[job_id]["progress"] = 1.0
+        jobs[job_id]["output_url"] = f"/output/{video_path.name}"
+        
+        return {
+            "model": model,
+            "created_at": int(time.time()),
+            "response": f"Video generated successfully",
+            "output_url": f"/output/{video_path.name}",
+            "job_id": job_id,
+        }
+    except Exception as e:
+        jobs[job_id]["status"] = "failed"
+        jobs[job_id]["error"] = str(e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8001)

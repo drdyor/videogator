@@ -136,3 +136,47 @@ export type AdminSetting = typeof adminSettings.$inferSelect;
 export type InsertAdminSetting = typeof adminSettings.$inferInsert;
 export type Alert = typeof alerts.$inferSelect;
 export type InsertAlert = typeof alerts.$inferInsert;
+
+// Video storage for generated videos
+export const videoStatusEnum = pgEnum("video_status", ["processing", "completed", "failed"]);
+
+export const videos = pgTable("videos", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  jobId: varchar("jobId", { length: 64 }),
+  prompt: text("prompt").notNull(),
+  negativePrompt: text("negativePrompt"),
+  model: varchar("model", { length: 50 }).notNull(),
+  width: integer("width"),
+  height: integer("height"),
+  numFrames: integer("numFrames"),
+  fps: integer("fps"),
+  seed: integer("seed"),
+  videoUrl: text("videoUrl").notNull(),
+  thumbnailUrl: text("thumbnailUrl"),
+  durationSeconds: integer("durationSeconds"),
+  fileSizeBytes: integer("fileSizeBytes"),
+  status: videoStatusEnum("status").default("completed").notNull(),
+  isPublic: integer("isPublic").default(0).notNull(),
+  metadata: text("metadata"), // JSON for additional data
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+// Saved prompts for reuse
+export const savedPrompts = pgTable("savedPrompts", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
+  prompt: text("prompt").notNull(),
+  negativePrompt: text("negativePrompt"),
+  model: varchar("model", { length: 50 }),
+  settings: text("settings"), // JSON for generation settings
+  isFavorite: integer("isFavorite").default(0).notNull(),
+  useCount: integer("useCount").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type Video = typeof videos.$inferSelect;
+export type InsertVideo = typeof videos.$inferInsert;
+export type SavedPrompt = typeof savedPrompts.$inferSelect;
+export type InsertSavedPrompt = typeof savedPrompts.$inferInsert;

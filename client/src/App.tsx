@@ -17,8 +17,9 @@ import Dashboard from "./pages/Dashboard";
 import Services from "./pages/Services";
 import Projects from "./pages/Projects";
 import Pharma from "./pages/Pharma";
-import Admin from "./pages/Admin";
-import VideoFoundry from "./pages/VideoFoundry";
+import Admin from "@/pages/Admin";
+import VideoFoundry from "@/pages/VideoFoundry";
+import VideoGallery from "@/pages/VideoGallery";
 import { supabase } from "@/lib/supabase";
 import { useState, useEffect } from "react";
 import type { Session } from "@supabase/supabase-js";
@@ -59,6 +60,13 @@ function AuthRouter() {
         {() => (
           <DashboardLayout>
             <VideoFoundry />
+          </DashboardLayout>
+        )}
+      </Route>
+      <Route path="/gallery">
+        {() => (
+          <DashboardLayout>
+            <VideoGallery />
           </DashboardLayout>
         )}
       </Route>

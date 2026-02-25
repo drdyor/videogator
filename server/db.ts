@@ -1,4 +1,4 @@
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import {
@@ -12,12 +12,16 @@ import {
   adminSettings,
   alerts,
   jobs,
+  videos,
+  savedPrompts,
   type InsertProject,
   type InsertJob,
   type InsertFeatureFlag,
   type InsertPricingRule,
   type InsertAdminSetting,
   type InsertAlert,
+  type InsertVideo,
+  type InsertSavedPrompt,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -263,4 +267,109 @@ export async function listAlerts(limit: number = 50) {
   const db = await getDb();
   if (!db) return [];
   return db.select().from(alerts).orderBy(desc(alerts.createdAt)).limit(limit);
+}
+
+// Video management functions
+export async function createVideo(video: InsertVideo) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(videos).values(video).returning();
+  return result[0];
+}
+
+export async function getUserVideos(userId: number, limit: number = 50, offset: number = 0) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(videos)
+    .where(eq(videos.userId, userId))
+    .orderBy(desc(videos.createdAt))
+    .limit(limit)
+    .offset(offset);
+}
+
+export async function getVideoById(videoId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(videos).where(eq(videos.id, videoId)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function getVideoByJobId(jobId: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(videos).where(eq(videos.jobId, jobId)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function updateVideo(videoId: number, data: Partial<InsertVideo>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.update(videos).set(data).where(eq(videos.id, videoId));
+}
+
+export async function deleteVideo(videoId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.delete(videos).where(eq(videos.id, videoId));
+}
+
+export async function getPublicVideos(limit: number = 20) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(videos)
+    .where(eq(videos.isPublic, 1))
+    .orderBy(desc(videos.createdAt))
+    .limit(limit);
+}
+
+export async function getUserVideoCount(userId: number) {
+  const db = await getDb();
+  if (!db) return 0;
+  const result = await db.select({ count: sql<number>`count(*)` })
+    .from(videos)
+    .where(eq(videos.userId, userId));
+  return result[0]?.count ?? 0;
+}
+
+// Saved prompts functions
+export async function createSavedPrompt(prompt: InsertSavedPrompt) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(savedPrompts).values(prompt).returning();
+  return result[0];
+}
+
+export async function getUserSavedPrompts(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(savedPrompts)
+    .where(eq(savedPrompts.userId, userId))
+    .orderBy(desc(savedPrompts.isFavorite), desc(savedPrompts.useCount), desc(savedPrompts.createdAt));
+}
+
+export async function getSavedPromptById(promptId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(savedPrompts).where(eq(savedPrompts.id, promptId)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function updateSavedPrompt(promptId: number, data: Partial<InsertSavedPrompt>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.update(savedPrompts).set(data).where(eq(savedPrompts.id, promptId));
+}
+
+export async function incrementPromptUseCount(promptId: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(savedPrompts)
+    .set({ useCount: sql`${savedPrompts.useCount} + 1` })
+    .where(eq(savedPrompts.id, promptId));
+}
+
+export async function deleteSavedPrompt(promptId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.delete(savedPrompts).where(eq(savedPrompts.id, promptId));
 }
