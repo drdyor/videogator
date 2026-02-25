@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, Plus, Play, Trash2, Settings2, Server, CheckCircle2, XCircle } from "lucide-react";
 import { useMemo, useState } from "react";
 import GeneratingAnimation from "@/components/GeneratingAnimation";
+import PromptBuilder from "@/components/PromptBuilder";
 
 type VideoModel = "hunyuan-video" | "mochi" | "cogvideo" | "modelscope" | "stable-video-diffusion";
 
@@ -322,18 +323,11 @@ export default function VideoFoundry() {
                       </Select>
                     </div>
 
-                    {/* Prompt */}
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Prompt</Label>
-                      <Input
-                        value={op.params.prompt}
-                        onChange={event =>
-                          updateParams(op.id, { prompt: event.target.value })
-                        }
-                        className="mt-1"
-                        placeholder="A cinematic product demo..."
-                      />
-                    </div>
+                    {/* Prompt Builder */}
+                    <PromptBuilder
+                      value={op.params.prompt}
+                      onChange={(prompt) => updateParams(op.id, { prompt })}
+                    />
 
                     {/* Negative Prompt */}
                     <div>
