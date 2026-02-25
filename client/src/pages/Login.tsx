@@ -52,7 +52,7 @@ export default function Login() {
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md p-8 space-y-6">
         <div className="text-center space-y-4">
-          <img src="/logo-small.png" alt="VideoGator" className="w-24 h-24 mx-auto" />
+          <img src="/videogator-logo.png" alt="VideoGator" className="w-24 h-24 mx-auto" />
           <div className="space-y-1">
             <h1 className="text-3xl font-bold">VideoGator</h1>
             <p className="text-muted-foreground">
@@ -145,6 +145,21 @@ export default function Login() {
             {isSignUp ? "Sign In" : "Sign Up"}
           </button>
         </p>
+
+        {import.meta.env.DEV && (
+          <div className="border-t border-dashed border-muted-foreground/20 pt-4">
+            <Button
+              variant="outline"
+              className="w-full border-amber-500/40 text-amber-500 hover:bg-amber-500/10"
+              onClick={() => {
+                localStorage.setItem("dev-bypass-auth", "true");
+                window.location.href = "/dashboard";
+              }}
+            >
+              Dev Login (skip auth)
+            </Button>
+          </div>
+        )}
       </Card>
     </div>
   );

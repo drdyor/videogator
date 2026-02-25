@@ -94,6 +94,13 @@ function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Dev bypass: skip Supabase auth in development
+    if (import.meta.env.DEV && localStorage.getItem("dev-bypass-auth")) {
+      setSession({ user: { id: "dev-user", email: "dev@localhost" } } as any);
+      setLoading(false);
+      return;
+    }
+
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
       setLoading(false);

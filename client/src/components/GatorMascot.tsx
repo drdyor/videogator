@@ -26,7 +26,7 @@ export default function GatorMascot({
         <div className="absolute inset-0 rounded-full border-2 border-gold/30 scale-125" />
         <div className="absolute inset-0 rounded-full border border-gold-dim/20 scale-[1.4]" />
         <img
-          src="/logo-small.png"
+          src="/videogator-logo.png"
           alt="VideoGator"
           className={`${sizeClass} relative z-10 drop-shadow-lg`}
         />
@@ -40,7 +40,7 @@ export default function GatorMascot({
         <div className="absolute inset-0 rounded-full bg-gold/10 animate-ping scale-150 opacity-20" />
         <div className="absolute inset-0 rounded-full border-2 border-gold/20 scale-125" />
         <img
-          src="/logo-small.png"
+          src="/videogator-logo.png"
           alt="VideoGator"
           className={`${sizeClass} relative z-10 drop-shadow-lg`}
         />
@@ -51,7 +51,7 @@ export default function GatorMascot({
   if (variant === "inline") {
     return (
       <img
-        src="/logo-small.png"
+        src="/videogator-logo.png"
         alt=""
         className={`${sizeClass} inline-block ${className}`}
       />
@@ -60,7 +60,7 @@ export default function GatorMascot({
 
   return (
     <img
-      src="/logo-small.png"
+      src="/videogator-logo.png"
       alt="VideoGator"
       className={`${sizeClass} ${className}`}
     />

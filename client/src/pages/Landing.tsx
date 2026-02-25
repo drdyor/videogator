@@ -47,6 +47,20 @@ export default function Landing() {
               Read Guides
             </Link>
           </div>
+
+          {/* Promo Video */}
+          <div className="mx-auto max-w-3xl mt-4">
+            <div className="rounded-xl overflow-hidden border border-gold-dim/20 shadow-2xl shadow-gold/5">
+              <video
+                src="/videogator-video.mp4"
+                autoPlay
+                muted
+                loop
+                playsInline
+                className="w-full"
+              />
+            </div>
+          </div>
         </div>
       </section>
 
