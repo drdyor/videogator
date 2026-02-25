@@ -13,6 +13,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
 
 interface PaywallProps {
   onAccessGranted?: () => void;
@@ -20,9 +21,16 @@ interface PaywallProps {
 
 export default function Paywall({ onAccessGranted }: PaywallProps) {
   const [isProcessing, setIsProcessing] = useState(false);
+  const { user } = useAuth();
   
   // Check if user has access
   const accessQuery = trpc.video.serverHealth.useQuery();
+  
+  // Owner bypass - if user role is admin, they get free access
+  const isOwner = (user as any)?.role === "admin";
+  
+  // During beta, everyone gets free access
+  const isBeta = true;
 
   const handlePurchase = async () => {
     setIsProcessing(true);
@@ -33,6 +41,36 @@ export default function Paywall({ onAccessGranted }: PaywallProps) {
     alert("Payment integration coming soon! For now, enjoy free access during beta.");
     onAccessGranted?.();
   };
+  
+  // Owner gets free access automatically
+  if (isOwner) {
+    return (
+      <Card className="p-4 bg-green-50 border-green-200 mb-4">
+        <div className="flex items-center gap-3">
+          <Crown className="w-5 h-5 text-green-600" />
+          <div>
+            <p className="font-semibold text-green-800">Owner Access</p>
+            <p className="text-sm text-green-700">You have unlimited free access as the site owner.</p>
+          </div>
+        </div>
+      </Card>
+    );
+  }
+  
+  // Beta access - everyone gets free access during beta
+  if (isBeta) {
+    return (
+      <Card className="p-4 bg-blue-50 border-blue-200 mb-4">
+        <div className="flex items-center gap-3">
+          <Sparkles className="w-5 h-5 text-blue-600" />
+          <div>
+            <p className="font-semibold text-blue-800">🎉 Beta Access</p>
+            <p className="text-sm text-blue-700">Free unlimited access during beta period.</p>
+          </div>
+        </div>
+      </Card>
+    );
+  }
 
   const features = [
     { icon: Video, text: "Unlimited video generation" },
