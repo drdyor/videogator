@@ -5,6 +5,7 @@ const navLinks = [
   { label: "Directory", path: "/directory" },
   { label: "Guides", path: "/guides" },
   { label: "Prompts", path: "/prompts" },
+  { label: "Get Started", path: "/get-started" },
 ];
 
 export default function PublicLayout({ children }: { children: React.ReactNode }) {

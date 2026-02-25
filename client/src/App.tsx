@@ -8,6 +8,7 @@ import Guides from "@/pages/Guides";
 import Prompts from "@/pages/Prompts";
 import ServiceDetail from "@/pages/ServiceDetail";
 import Compare from "@/pages/Compare";
+import GetStarted from "@/pages/GetStarted";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
@@ -169,6 +170,13 @@ function App() {
               {() => (
                 <PublicLayout>
                   <Compare />
+                </PublicLayout>
+              )}
+            </Route>
+            <Route path="/get-started">
+              {() => (
+                <PublicLayout>
+                  <GetStarted />
                 </PublicLayout>
               )}
             </Route>
