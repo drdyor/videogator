@@ -11,17 +11,17 @@ export default function Landing() {
   return (
     <div className="space-y-0">
       {/* Hero */}
-      <section className="relative overflow-hidden py-24 md:py-36">
+      <section className="relative overflow-hidden py-16 md:py-24">
         <div className="absolute inset-0 bg-gradient-to-b from-burgundy/20 via-background to-background" />
-        <div className="container relative z-10 text-center space-y-8">
-          <GatorMascot size="xl" variant="pulse" className="mx-auto mb-2" />
+        <div className="container relative z-10 text-center space-y-5">
+          <GatorMascot size="lg" variant="pulse" className="mx-auto" />
 
           <div className="inline-flex items-center gap-2 rounded-full border border-gold-dim/30 bg-gold/5 px-4 py-1.5 text-xs text-gold">
             <Zap className="w-3 h-3" />
             18 services compared — see real examples, not marketing demos
           </div>
 
-          <h1 className="font-display text-5xl md:text-7xl font-bold leading-tight">
+          <h1 className="font-display text-4xl md:text-6xl font-bold leading-tight">
             <span className="gold-gradient-text">Every AI Video Tool,</span>
             <br />
             <span className="text-foreground">One Place.</span>
@@ -65,8 +65,8 @@ export default function Landing() {
       </section>
 
       {/* Three Pillars */}
-      <section className="container py-20">
-        <div className="text-center mb-12">
+      <section className="container py-12">
+        <div className="text-center mb-8">
           <div className="art-deco-divider mb-6">
             <span className="font-display text-sm tracking-widest uppercase text-gold-dim">
               What You'll Find
@@ -126,8 +126,8 @@ export default function Landing() {
       </section>
 
       {/* Featured Services */}
-      <section className="container py-20">
-        <div className="text-center mb-12">
+      <section className="container py-12">
+        <div className="text-center mb-8">
           <div className="art-deco-divider mb-6">
             <span className="font-display text-sm tracking-widest uppercase text-gold-dim">
               Top Services
@@ -193,8 +193,8 @@ export default function Landing() {
       </section>
 
       {/* Popular Guides Preview */}
-      <section className="container py-20">
-        <div className="text-center mb-12">
+      <section className="container py-12">
+        <div className="text-center mb-8">
           <div className="art-deco-divider mb-6">
             <span className="font-display text-sm tracking-widest uppercase text-gold-dim">
               Learn
@@ -232,8 +232,8 @@ export default function Landing() {
       </section>
 
       {/* Popular Comparisons */}
-      <section className="container py-20">
-        <div className="text-center mb-12">
+      <section className="container py-12">
+        <div className="text-center mb-8">
           <div className="art-deco-divider mb-6">
             <span className="font-display text-sm tracking-widest uppercase text-gold-dim">
               Compare
@@ -269,8 +269,8 @@ export default function Landing() {
       </section>
 
       {/* How It Works */}
-      <section className="container py-20">
-        <div className="text-center mb-12">
+      <section className="container py-12">
+        <div className="text-center mb-8">
           <div className="art-deco-divider mb-6">
             <span className="font-display text-sm tracking-widest uppercase text-gold-dim">
               Platform
