@@ -2,7 +2,7 @@ import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Loader2 } from "lucide-react";
+import { Film, Loader2 } from "lucide-react";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -51,10 +51,10 @@ export default function Login() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md p-8 space-y-6">
-        <div className="text-center space-y-4">
-          <img src="/videogator-logo.png" alt="VideoGator" className="w-24 h-24 mx-auto" />
+        <div className="text-center space-y-3">
+          <Film className="w-12 h-12 text-gold mx-auto" />
           <div className="space-y-1">
-            <h1 className="text-3xl font-bold">VideoGator</h1>
+            <h1 className="text-3xl font-bold font-display gold-gradient-text">VideoGator</h1>
             <p className="text-muted-foreground">
               {isSignUp ? "Create your account" : "Sign in to your account"}
             </p>
