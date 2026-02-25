@@ -28,17 +28,13 @@ export default function Landing() {
 
         <div className="container relative z-10 text-center space-y-5 mt-auto pt-[55vh]">
           <h1 className="font-display text-4xl md:text-6xl font-bold leading-tight">
-            <span className="gold-gradient-text">Video Generation,</span>
+            <span className="gold-gradient-text">AI Video Generation,</span>
             <br />
             <span className="text-foreground">One Byte at a Time.</span>
           </h1>
 
-          <p className="text-sm uppercase tracking-widest text-gold-dim font-display">
-            AI Video Generator Aggregator
-          </p>
-
           <p className="mx-auto max-w-xl text-lg text-muted-foreground">
-            Compare tools, generate with your own GPU, no cloud costs.
+            Compare the newest AI video generation tools, even locally.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
