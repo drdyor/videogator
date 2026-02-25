@@ -11,22 +11,22 @@ export default function Landing() {
   return (
     <div className="space-y-0">
       {/* Hero */}
-      <section className="relative overflow-hidden pt-48 md:pt-64 pb-16 md:pb-24">
+      <section className="relative overflow-hidden min-h-screen">
         {/* Video background */}
-        <div className="absolute inset-0">
+        <div className="absolute inset-0 flex items-center justify-center">
           <video
             src="/videogator-video.mp4"
             autoPlay
             muted
             loop
             playsInline
-            className="w-full h-full object-cover object-[center_30%]"
+            className="w-[85%] h-auto"
           />
           <div className="absolute inset-0 bg-background/30" />
           <div className="absolute inset-0 bg-gradient-to-b from-transparent via-background/30 to-background/70" />
         </div>
 
-        <div className="container relative z-10 text-center space-y-5">
+        <div className="container relative z-10 text-center space-y-5 mt-auto pt-[55vh]">
           <h1 className="font-display text-4xl md:text-6xl font-bold leading-tight">
             <span className="gold-gradient-text">Video Generation,</span>
             <br />
