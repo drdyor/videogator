@@ -11,7 +11,7 @@ export default function Landing() {
   return (
     <div className="space-y-0">
       {/* Hero */}
-      <section className="relative overflow-hidden py-24 md:py-36">
+      <section className="relative overflow-hidden pt-48 md:pt-64 pb-16 md:pb-24">
         {/* Video background */}
         <div className="absolute inset-0">
           <video
@@ -20,18 +20,13 @@ export default function Landing() {
             muted
             loop
             playsInline
-            className="w-full h-full object-cover object-[center_35%]"
+            className="w-full h-full object-cover object-[center_30%]"
           />
-          <div className="absolute inset-0 bg-background/35" />
-          <div className="absolute inset-0 bg-gradient-to-b from-background/10 via-transparent to-background/60" />
+          <div className="absolute inset-0 bg-background/30" />
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-background/30 to-background/70" />
         </div>
 
         <div className="container relative z-10 text-center space-y-5">
-          <div className="inline-flex items-center gap-2 rounded-full border border-gold-dim/30 bg-gold/5 px-4 py-1.5 text-xs text-gold backdrop-blur-sm">
-            <Zap className="w-3 h-3" />
-            18 services compared — see real examples, not marketing demos
-          </div>
-
           <h1 className="font-display text-4xl md:text-6xl font-bold leading-tight">
             <span className="gold-gradient-text">Video Generation,</span>
             <br />
@@ -43,7 +38,7 @@ export default function Landing() {
           </p>
 
           <p className="mx-auto max-w-xl text-lg text-muted-foreground">
-            Compare 18+ AI video tools side-by-side. Generate videos with your own GPU. No cloud costs.
+            Compare tools, generate with your own GPU, no cloud costs.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
