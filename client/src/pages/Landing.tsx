@@ -20,7 +20,7 @@ export default function Landing() {
             muted
             loop
             playsInline
-            className="w-full h-full object-cover object-bottom"
+            className="w-full h-full object-cover object-[center_35%]"
           />
           <div className="absolute inset-0 bg-background/40" />
           <div className="absolute inset-0 bg-gradient-to-b from-background/20 via-background/40 to-background" />
@@ -37,6 +37,10 @@ export default function Landing() {
             <br />
             <span className="text-foreground">One Byte at a Time.</span>
           </h1>
+
+          <p className="text-sm uppercase tracking-widest text-gold-dim font-display">
+            AI Video Generator Aggregator
+          </p>
 
           <p className="mx-auto max-w-2xl text-lg text-muted-foreground">
             Compare commercial APIs, open-source models, and GPU infrastructure.
