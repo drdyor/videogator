@@ -184,6 +184,22 @@ function App() {
               {() => session ? <AuthRouter /> : <Login />}
             </Route>
 
+            {/* Foundry & Gallery — public for testing */}
+            <Route path="/foundry">
+              {() => (
+                <DashboardLayout>
+                  <VideoFoundry />
+                </DashboardLayout>
+              )}
+            </Route>
+            <Route path="/gallery">
+              {() => (
+                <DashboardLayout>
+                  <VideoGallery />
+                </DashboardLayout>
+              )}
+            </Route>
+
             {/* Auth-protected routes */}
             <Route path="/dashboard">
               {() => session ? <AuthRouter /> : <Login />}
@@ -195,9 +211,6 @@ function App() {
               {() => session ? <AuthRouter /> : <Login />}
             </Route>
             <Route path="/pharma">
-              {() => session ? <AuthRouter /> : <Login />}
-            </Route>
-            <Route path="/foundry">
               {() => session ? <AuthRouter /> : <Login />}
             </Route>
             <Route path="/admin">
