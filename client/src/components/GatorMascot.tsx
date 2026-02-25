@@ -2,11 +2,11 @@ type GatorSize = "xs" | "sm" | "md" | "lg" | "xl";
 type GatorVariant = "default" | "framed" | "pulse" | "inline";
 
 const sizeMap: Record<GatorSize, string> = {
-  xs: "w-5 h-5",
-  sm: "w-8 h-8",
-  md: "w-16 h-16",
-  lg: "w-24 h-24",
-  xl: "w-36 h-36",
+  xs: "w-5",
+  sm: "w-8",
+  md: "w-16",
+  lg: "w-28",
+  xl: "w-40",
 };
 
 export default function GatorMascot({
@@ -26,7 +26,7 @@ export default function GatorMascot({
         <img
           src="/videogator-logo.png"
           alt="VideoGator"
-          className={`${sizeClass} relative z-10 drop-shadow-lg rounded-full`}
+          className={`${sizeClass} relative z-10 drop-shadow-lg`}
         />
       </div>
     );
@@ -39,7 +39,7 @@ export default function GatorMascot({
         <img
           src="/videogator-logo.png"
           alt="VideoGator"
-          className={`${sizeClass} relative z-10 drop-shadow-lg rounded-full`}
+          className={`${sizeClass} relative z-10 drop-shadow-lg`}
         />
       </div>
     );
