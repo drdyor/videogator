@@ -11,12 +11,25 @@ export default function Landing() {
   return (
     <div className="space-y-0">
       {/* Hero */}
-      <section className="relative overflow-hidden py-16 md:py-24">
-        <div className="absolute inset-0 bg-gradient-to-b from-burgundy/20 via-background to-background" />
+      <section className="relative overflow-hidden py-24 md:py-36">
+        {/* Video background */}
+        <div className="absolute inset-0">
+          <video
+            src="/videogator-video.mp4"
+            autoPlay
+            muted
+            loop
+            playsInline
+            className="w-full h-full object-cover"
+          />
+          <div className="absolute inset-0 bg-background/70 backdrop-blur-sm" />
+          <div className="absolute inset-0 bg-gradient-to-b from-background/40 via-background/60 to-background" />
+        </div>
+
         <div className="container relative z-10 text-center space-y-5">
           <GatorMascot size="lg" variant="pulse" className="mx-auto" />
 
-          <div className="inline-flex items-center gap-2 rounded-full border border-gold-dim/30 bg-gold/5 px-4 py-1.5 text-xs text-gold">
+          <div className="inline-flex items-center gap-2 rounded-full border border-gold-dim/30 bg-gold/5 px-4 py-1.5 text-xs text-gold backdrop-blur-sm">
             <Zap className="w-3 h-3" />
             18 services compared — see real examples, not marketing demos
           </div>
@@ -42,24 +55,10 @@ export default function Landing() {
             </Link>
             <Link
               href="/guides"
-              className="inline-flex items-center gap-2 rounded-md border border-gold-dim/40 px-6 py-3 text-base font-medium text-foreground hover:border-gold-dim transition-colors"
+              className="inline-flex items-center gap-2 rounded-md border border-gold-dim/40 bg-background/30 backdrop-blur-sm px-6 py-3 text-base font-medium text-foreground hover:border-gold-dim transition-colors"
             >
               Read Guides
             </Link>
-          </div>
-
-          {/* Promo Video */}
-          <div className="mx-auto max-w-3xl mt-4">
-            <div className="rounded-xl overflow-hidden border border-gold-dim/20 shadow-2xl shadow-gold/5">
-              <video
-                src="/videogator-video.mp4"
-                autoPlay
-                muted
-                loop
-                playsInline
-                className="w-full"
-              />
-            </div>
           </div>
         </div>
       </section>
