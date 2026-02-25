@@ -1,0 +1,73 @@
+# VideoGator - AI Video Generation Aggregator
+# https://videogator.vercel.app
+# Last updated: 2026-02-25
+
+## What is VideoGator?
+VideoGator is a free platform for comparing AI video generation tools and generating videos locally using your own GPU. It includes a service directory, prompt library, cinematography-focused prompt builder, comparison engine, and guides.
+
+## Services Compared (17 total)
+
+### Commercial APIs
+- Runway Gen-3 Alpha Turbo: Text/image-to-video, up to 4K, 10s clips, API available. From $0.05/sec.
+- Kling AI 1.6: Text/image-to-video, up to 1080p, 10s clips, API available. From $0.014/sec.
+- Pika 2.0: Text/image-to-video, up to 1080p, 4s clips, API available. From $0.035/sec.
+- Luma Dream Machine 1.5: Text/image-to-video, up to 1080p, 5s clips, API available. Free tier + paid.
+- MiniMax Video-01: Text/image-to-video, up to 1080p, 6s clips, API available. From $0.03/sec.
+- OpenAI Sora Turbo: Text/image-to-video, up to 1080p, 20s clips. $200/mo ChatGPT Pro.
+- Google Veo 2: Text/image-to-video, up to 4K, 8s clips. Vertex AI access.
+- Seedance 1.0 (ByteDance): Text/image-to-video, up to 1080p, multi-shot. Credits-based.
+- HeyGen: Avatar-based video, lip sync, up to 1080p. From $29/mo.
+
+### Open Source (Self-Hostable, Free)
+- Wan 2.1 (Alibaba): Text/image-to-video, up to 720p, 5s clips. Requires 8-24GB VRAM.
+- HunyuanVideo (Tencent): Text-to-video, up to 720p, 5s clips. Requires 16-24GB VRAM.
+- CogVideoX-5B (Tsinghua): Text/image-to-video, up to 720p, 6s clips. Requires 16GB VRAM.
+- LTX-Video 2 (Lightricks): Text/image-to-video, up to 4K, 20s clips. Requires 16GB VRAM.
+- Mochi 1 (Genmo): Text-to-video, up to 848x480, 5s clips. Requires 20-24GB VRAM.
+
+### Infrastructure
+- RunPod: GPU cloud rentals from $0.39/hr (RTX 4090).
+- Replicate: Pay-per-prediction API for open source models.
+- fal.ai: Serverless GPU inference, pay per second.
+
+## Comparisons Available
+1. Runway Gen-3 vs Pika 2.0: Head-to-head with pricing, quality, and use cases.
+2. Runway Gen-3 vs Kling AI: Feature matrix, API comparison, verdict.
+3. Best Text-to-Video AI Generators 2025: 7-service comparison with rankings.
+4. Open Source Video Models Compared: Wan vs HunyuanVideo vs CogVideoX vs LTX vs Mochi.
+5. Self-Hosting vs API Cost Breakdown: When to use your own GPU vs cloud APIs.
+
+## Guides (11 total)
+1. How to Generate AI Video from Text (beginner)
+2. How to Animate a Still Image with AI (beginner)
+3. Video Prompt Engineering for AI Models (intermediate)
+4. Self-Hosting Video Models on Your GPU (advanced)
+5. Runway vs Kling vs Pika Deep Comparison (comparison)
+6. AI Video for Social Media Content (social-media)
+7. Best Open Source Video Models (open-source)
+8. GPU Infrastructure Guide for Video AI (infrastructure)
+9. How to Edit AI-Generated Videos (editing)
+10. How to Fine-Tune Video Models (advanced)
+11. Commercial Use and Legal Guide (legal)
+
+## Prompt Library (24 curated prompts)
+Categories: Cinematic, Anime, Documentary, Product, Abstract, Retro, Nature, Sci-Fi
+
+## Cinematic Prompt Builder
+Interactive tool teaching cinematography through AI video generation:
+- 8 emotion arcs (tense, longing, awe, melancholy, unease, joy, power, mystery)
+- 8 scene archetypes with style variations
+- 70+ cinematography tags (camera movement, angles, lenses, lighting, color grading, atmosphere)
+- Character consistency strategies for open-source models
+- 10 preset recipes with film references
+- Educational "Film School" panel explaining why technique combinations work
+
+## Technical Stack
+- Frontend: React 19 + Vite + Tailwind CSS 4
+- Auth: Supabase
+- Video Generation: Local GPU via FastAPI server (supports HunyuanVideo, Mochi, CogVideoX, ModelScope, SVD)
+- Deployment: Vercel
+
+## Contact
+Website: https://videogator.vercel.app
+GitHub: https://github.com/drdyor/videogator

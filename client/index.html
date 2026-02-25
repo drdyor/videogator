@@ -19,6 +19,105 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+    <!-- Structured Data for AI Agents & Search Engines -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "VideoGator",
+      "url": "https://videogator.vercel.app",
+      "description": "AI Video Generation Aggregator. Compare 17+ services, generate videos locally with your GPU, access curated prompt library and cinematography guides.",
+      "applicationCategory": "MultimediaApplication",
+      "operatingSystem": "Web",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "featureList": [
+        "Compare 17+ AI video generation services",
+        "Local GPU video generation (RTX 4090 supported)",
+        "Cinematic prompt builder with film school education",
+        "24+ curated video prompts across 8 styles",
+        "11 guides on prompt engineering, self-hosting, and more",
+        "Side-by-side service comparisons with feature matrices",
+        "Open source model support (Wan 2.1, HunyuanVideo, CogVideoX, LTX-2, Mochi)"
+      ]
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "What is the best AI video generator in 2026?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "For commercial use, Runway Gen-3 Alpha leads in quality. For free local generation, Wan 2.1 (Alibaba) is the top open-source model, running on an RTX 4090 with 8-24GB VRAM."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Can I generate AI videos for free?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. Open-source models like Wan 2.1, HunyuanVideo, CogVideoX, LTX-Video 2, and Mochi 1 can run locally on your own GPU at no cost. You need an NVIDIA GPU with 16-24GB VRAM."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What GPU do I need for AI video generation?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "An NVIDIA RTX 4090 (24GB VRAM) is ideal. RTX 3090 (24GB) also works. Some models like ModelScope run on as little as 8GB VRAM. CUDA support is required."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How does Runway compare to Kling AI?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Runway Gen-3 offers superior motion quality and API access at $0.05/sec. Kling AI 1.6 is more affordable at $0.014/sec with good quality. Runway is better for professional production; Kling for high-volume content."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Is Seedance open source?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No. Seedance (by ByteDance) is proprietary. It is only available through ByteDance's commercial platforms. For open-source alternatives, consider Wan 2.1 or LTX-Video 2."
+          }
+        }
+      ]
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "ItemList",
+      "name": "AI Video Generation Services",
+      "description": "Comprehensive directory of AI video generation services compared by VideoGator",
+      "numberOfItems": 17,
+      "itemListElement": [
+        {"@type": "ListItem", "position": 1, "name": "Runway Gen-3 Alpha Turbo", "description": "Industry-leading text and image to video. Up to 4K, 10s clips. API available. From $0.05/sec."},
+        {"@type": "ListItem", "position": 2, "name": "Kling AI 1.6", "description": "High-quality video generation with motion brush. Up to 1080p, 10s clips. API available. From $0.014/sec."},
+        {"@type": "ListItem", "position": 3, "name": "Pika 2.0", "description": "Creative video generation with scene editing. Up to 1080p, 4s clips. From $0.035/sec."},
+        {"@type": "ListItem", "position": 4, "name": "Luma Dream Machine 1.5", "description": "Fast, affordable video generation. Up to 1080p, 5s clips. Free tier available."},
+        {"@type": "ListItem", "position": 5, "name": "OpenAI Sora Turbo", "description": "Text to video by OpenAI. Up to 1080p, 20s clips. $200/mo ChatGPT Pro."},
+        {"@type": "ListItem", "position": 6, "name": "Google Veo 2", "description": "Google's video generation model. Up to 4K, 8s clips. Vertex AI access."},
+        {"@type": "ListItem", "position": 7, "name": "Seedance 1.0 (ByteDance)", "description": "Multi-shot video generation. Up to 1080p. Credits-based pricing."},
+        {"@type": "ListItem", "position": 8, "name": "HeyGen", "description": "Avatar-based video with lip sync. Up to 1080p. From $29/mo."},
+        {"@type": "ListItem", "position": 9, "name": "Wan 2.1 (Alibaba, Open Source)", "description": "Top open-source video model. Up to 720p, 5s clips. Requires 8-24GB VRAM. Free."},
+        {"@type": "ListItem", "position": 10, "name": "HunyuanVideo (Tencent, Open Source)", "description": "High-quality open-source. Up to 720p, 5s clips. Requires 16-24GB VRAM. Free."},
+        {"@type": "ListItem", "position": 11, "name": "CogVideoX-5B (Open Source)", "description": "Balanced quality/speed. Up to 720p, 6s clips. Requires 16GB VRAM. Free."},
+        {"@type": "ListItem", "position": 12, "name": "LTX-Video 2 (Lightricks, Open Source)", "description": "4K with audio. Up to 4K 50fps, 20s clips. Requires 16GB VRAM. Free."},
+        {"@type": "ListItem", "position": 13, "name": "Mochi 1 (Genmo, Open Source)", "description": "Research-grade quality. Up to 848x480, 5s clips. Requires 20-24GB VRAM. Free."}
+      ]
+    }
+    </script>
   </head>
 
   <body>
