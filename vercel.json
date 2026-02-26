@@ -4,10 +4,9 @@
   "installCommand": "pnpm install",
   "framework": null,
   "functions": {
-    "api/index.ts": {
+    "api/index.js": {
       "memory": 256,
-      "maxDuration": 30,
-      "includeFiles": "server/**,drizzle/**,shared/**"
+      "maxDuration": 30
     }
   },
   "headers": [
