@@ -24,24 +24,38 @@ export async function createContext(
     const token = authHeader.slice(7);
     try {
       const { data, error } = await (supabase.auth as any).getUser(token);
+      if (error) {
+        console.error("[Context] Supabase getUser error:", error.message);
+      }
       if (!error && data.user) {
         const supaUser = data.user;
         const openId = supaUser.id;
+        console.log("[Context] Supabase user verified:", openId, supaUser.email);
 
         // Sync Supabase user to local DB
-        let localUser = await db.getUserByOpenId(openId);
-        if (!localUser) {
-          await db.upsertUser({
-            openId,
-            name: supaUser.user_metadata?.full_name || supaUser.email?.split("@")[0] || "User",
-            email: supaUser.email,
-            role: "admin",
-          });
-          localUser = await db.getUserByOpenId(openId);
+        try {
+          let localUser = await db.getUserByOpenId(openId);
+          if (!localUser) {
+            console.log("[Context] User not in DB, upserting...");
+            await db.upsertUser({
+              openId,
+              name: supaUser.user_metadata?.full_name || supaUser.email?.split("@")[0] || "User",
+              email: supaUser.email,
+              role: "admin",
+            });
+            localUser = await db.getUserByOpenId(openId);
+          }
+          user = localUser ?? null;
+          if (!user) {
+            console.error("[Context] DB lookup returned null after upsert for openId:", openId);
+          }
+        } catch (dbError) {
+          console.error("[Context] DB operation failed:", dbError);
+          user = null;
         }
-        user = localUser ?? null;
       }
-    } catch {
+    } catch (err) {
+      console.error("[Context] Auth failed:", err);
       user = null;
     }
   }
