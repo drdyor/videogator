@@ -102,39 +102,21 @@ function App() {
       return;
     }
 
-    // Handle OAuth callback — exchange code for session if present in URL
-    const params = new URLSearchParams(window.location.search);
-    const hasAuthCode = params.has("code");
-    const hasHashToken = window.location.hash.includes("access_token");
-
-    if (hasAuthCode || hasHashToken) {
-      // Let Supabase exchange the code/token, then get the session
-      supabase.auth.exchangeCodeForSession(params.get("code") || "").then(() => {
-        return supabase.auth.getSession();
-      }).then(({ data }) => {
-        setSession(data.session);
-        setLoading(false);
-        // Clean up URL
-        window.history.replaceState({}, "", window.location.pathname);
-      }).catch(() => {
-        // If code exchange fails, try getSession directly (handles hash tokens)
-        supabase.auth.getSession().then(({ data }) => {
-          setSession(data.session);
-          setLoading(false);
-        });
-      });
-    } else {
-      supabase.auth.getSession().then(({ data }) => {
-        setSession(data.session);
-        setLoading(false);
-      });
-    }
-
+    // Listen for auth state changes FIRST (catches OAuth callbacks)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+      (event, session) => {
+        console.log("[Auth]", event, session?.user?.email);
         setSession(session);
+        setLoading(false);
       }
     );
+
+    // Then check for existing session
+    supabase.auth.getSession().then(({ data, error }) => {
+      console.log("[Auth] getSession:", data.session?.user?.email, error);
+      setSession(data.session);
+      setLoading(false);
+    });
 
     return () => subscription.unsubscribe();
   }, []);

@@ -3,6 +3,9 @@ import { createClient } from "@supabase/supabase-js";
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL ?? "";
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY ?? "";
 
+console.log("[Supabase] URL:", supabaseUrl ? supabaseUrl.substring(0, 30) + "..." : "MISSING");
+console.log("[Supabase] Key:", supabaseAnonKey ? supabaseAnonKey.substring(0, 20) + "..." : "MISSING");
+
 if (!supabaseUrl || !supabaseAnonKey) {
   console.warn("Supabase credentials missing. Auth will not work. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
 }
