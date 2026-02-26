@@ -1,17 +1,38 @@
 import { build } from "esbuild";
-import { renameSync } from "fs";
+import { writeFileSync } from "fs";
 
 // Bundle the API into a single file
-await build({
+// external: only npm packages, NOT local imports
+const result = await build({
   entryPoints: ["api/index.ts"],
   platform: "node",
-  packages: "external",
   bundle: true,
   format: "esm",
-  outfile: "api/index.js",
+  write: false,
+  external: [
+    "express",
+    "@trpc/server",
+    "@trpc/server/*",
+    "@supabase/supabase-js",
+    "drizzle-orm",
+    "drizzle-orm/*",
+    "postgres",
+    "zod",
+    "bullmq",
+    "ioredis",
+    "cookie",
+    "jose",
+    "nanoid",
+    "superjson",
+    "dotenv",
+    "dotenv/*",
+    "crypto",
+    "axios",
+    "@aws-sdk/*",
+  ],
 });
 
-// Rename .ts so Vercel doesn't try to also compile it
-renameSync("api/index.ts", "api/index.ts.bak");
+// Overwrite the .ts file with the bundled JS content
+writeFileSync("api/index.ts", result.outputFiles[0].text);
 
-console.log("✅ API bundled to api/index.js");
+console.log("✅ API bundled — api/index.ts overwritten with bundled code");
