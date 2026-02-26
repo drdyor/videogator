@@ -1,520 +1,3 @@
-var __defProp = Object.defineProperty;
-var __getOwnPropNames = Object.getOwnPropertyNames;
-var __esm = (fn, res) => function __init() {
-  return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
-};
-var __export = (target, all) => {
-  for (var name in all)
-    __defProp(target, name, { get: all[name], enumerable: true });
-};
-
-// server/_core/env.ts
-var ENV;
-var init_env = __esm({
-  "server/_core/env.ts"() {
-    "use strict";
-    ENV = {
-      appId: process.env.VITE_APP_ID ?? "",
-      cookieSecret: process.env.JWT_SECRET ?? "",
-      databaseUrl: process.env.DATABASE_URL ?? "",
-      oAuthServerUrl: process.env.OAUTH_SERVER_URL ?? "",
-      ownerOpenId: process.env.OWNER_OPEN_ID ?? "",
-      isProduction: process.env.NODE_ENV === "production",
-      forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
-      forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? ""
-    };
-  }
-});
-
-// drizzle/schema.ts
-import { integer, pgEnum, pgTable, text, timestamp, varchar, serial } from "drizzle-orm/pg-core";
-var roleEnum, users, projectStatusEnum, projects, jobStatusEnum, jobs, categoryEnum, services, pharmaTemplates, featureFlags, pricingRules, adminSettings, alertLevelEnum, alerts, videoStatusEnum, videos, savedPrompts;
-var init_schema = __esm({
-  "drizzle/schema.ts"() {
-    "use strict";
-    roleEnum = pgEnum("role", ["user", "admin"]);
-    users = pgTable("users", {
-      /**
-       * Surrogate primary key. Auto-incremented numeric value managed by the database.
-       * Use this for relations between tables.
-       */
-      id: serial("id").primaryKey(),
-      /** Manus OAuth identifier (openId) returned from the OAuth callback. Unique per user. */
-      openId: varchar("openId", { length: 64 }).notNull().unique(),
-      name: text("name"),
-      email: varchar("email", { length: 320 }),
-      loginMethod: varchar("loginMethod", { length: 64 }),
-      role: roleEnum("role").default("user").notNull(),
-      createdAt: timestamp("createdAt").defaultNow().notNull(),
-      updatedAt: timestamp("updatedAt").defaultNow().notNull(),
-      lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
-      encryptedApiKeys: text("encryptedApiKeys")
-    });
-    projectStatusEnum = pgEnum("project_status", ["draft", "generating", "completed", "failed"]);
-    projects = pgTable("projects", {
-      id: serial("id").primaryKey(),
-      userId: integer("userId").notNull(),
-      name: varchar("name", { length: 255 }).notNull(),
-      description: text("description"),
-      serviceId: varchar("serviceId", { length: 64 }).notNull(),
-      status: projectStatusEnum("status").default("draft").notNull(),
-      prompt: text("prompt"),
-      settings: text("settings"),
-      // JSON string for service-specific settings
-      videoUrl: varchar("videoUrl", { length: 512 }),
-      createdAt: timestamp("createdAt").defaultNow().notNull(),
-      updatedAt: timestamp("updatedAt").defaultNow().notNull()
-    });
-    jobStatusEnum = pgEnum("job_status", ["queued", "processing", "completed", "failed"]);
-    jobs = pgTable("jobs", {
-      id: varchar("id", { length: 64 }).primaryKey(),
-      userId: integer("userId").notNull(),
-      status: jobStatusEnum("status").default("queued").notNull(),
-      inputUrl: text("inputUrl").notNull(),
-      operations: text("operations").notNull(),
-      // JSON string
-      currentStep: integer("currentStep").default(0).notNull(),
-      outputUrl: text("outputUrl"),
-      stepResults: text("stepResults"),
-      error: text("error"),
-      createdAt: timestamp("createdAt").defaultNow().notNull(),
-      updatedAt: timestamp("updatedAt").defaultNow().notNull(),
-      completedAt: timestamp("completedAt")
-    });
-    categoryEnum = pgEnum("category", ["general", "pharma", "specialized"]);
-    services = pgTable("services", {
-      id: varchar("id", { length: 64 }).primaryKey(),
-      name: varchar("name", { length: 255 }).notNull(),
-      category: categoryEnum("category").default("general").notNull(),
-      description: text("description"),
-      capabilities: text("capabilities"),
-      // JSON array of capability strings
-      pricing: varchar("pricing", { length: 255 }),
-      website: varchar("website", { length: 512 }),
-      icon: varchar("icon", { length: 512 }),
-      createdAt: timestamp("createdAt").defaultNow().notNull()
-    });
-    pharmaTemplates = pgTable("pharmaTemplates", {
-      id: serial("id").primaryKey(),
-      name: varchar("name", { length: 255 }).notNull(),
-      description: text("description"),
-      category: varchar("category", { length: 128 }).notNull(),
-      // e.g., "ligand-binding", "antibody-conjugate"
-      parameters: text("parameters"),
-      // JSON schema for configurable parameters
-      previewImage: varchar("previewImage", { length: 512 }),
-      createdAt: timestamp("createdAt").defaultNow().notNull()
-    });
-    featureFlags = pgTable("featureFlags", {
-      key: varchar("key", { length: 128 }).primaryKey(),
-      enabled: integer("enabled").default(1).notNull(),
-      description: text("description"),
-      updatedAt: timestamp("updatedAt").defaultNow().notNull()
-    });
-    pricingRules = pgTable("pricingRules", {
-      key: varchar("key", { length: 64 }).primaryKey(),
-      costCents: integer("costCents").default(0).notNull(),
-      priceCents: integer("priceCents").default(0).notNull(),
-      updatedAt: timestamp("updatedAt").defaultNow().notNull()
-    });
-    adminSettings = pgTable("adminSettings", {
-      key: varchar("key", { length: 64 }).primaryKey(),
-      value: text("value").notNull(),
-      updatedAt: timestamp("updatedAt").defaultNow().notNull()
-    });
-    alertLevelEnum = pgEnum("alert_level", ["info", "warning", "critical"]);
-    alerts = pgTable("alerts", {
-      id: serial("id").primaryKey(),
-      level: alertLevelEnum("level").notNull(),
-      title: varchar("title", { length: 255 }).notNull(),
-      message: text("message").notNull(),
-      jobId: varchar("jobId", { length: 64 }),
-      userId: integer("userId"),
-      error: text("error"),
-      action: text("action"),
-      costCents: integer("costCents"),
-      createdAt: timestamp("createdAt").defaultNow().notNull()
-    });
-    videoStatusEnum = pgEnum("video_status", ["processing", "completed", "failed"]);
-    videos = pgTable("videos", {
-      id: serial("id").primaryKey(),
-      userId: integer("userId").notNull(),
-      jobId: varchar("jobId", { length: 64 }),
-      prompt: text("prompt").notNull(),
-      negativePrompt: text("negativePrompt"),
-      model: varchar("model", { length: 50 }).notNull(),
-      width: integer("width"),
-      height: integer("height"),
-      numFrames: integer("numFrames"),
-      fps: integer("fps"),
-      seed: integer("seed"),
-      videoUrl: text("videoUrl").notNull(),
-      thumbnailUrl: text("thumbnailUrl"),
-      durationSeconds: integer("durationSeconds"),
-      fileSizeBytes: integer("fileSizeBytes"),
-      status: videoStatusEnum("status").default("completed").notNull(),
-      isPublic: integer("isPublic").default(0).notNull(),
-      metadata: text("metadata"),
-      // JSON for additional data
-      createdAt: timestamp("createdAt").defaultNow().notNull()
-    });
-    savedPrompts = pgTable("savedPrompts", {
-      id: serial("id").primaryKey(),
-      userId: integer("userId").notNull(),
-      name: varchar("name", { length: 255 }).notNull(),
-      prompt: text("prompt").notNull(),
-      negativePrompt: text("negativePrompt"),
-      model: varchar("model", { length: 50 }),
-      settings: text("settings"),
-      // JSON for generation settings
-      isFavorite: integer("isFavorite").default(0).notNull(),
-      useCount: integer("useCount").default(0).notNull(),
-      createdAt: timestamp("createdAt").defaultNow().notNull()
-    });
-  }
-});
-
-// server/db.ts
-var db_exports = {};
-__export(db_exports, {
-  createAlert: () => createAlert,
-  createJob: () => createJob,
-  createProject: () => createProject,
-  createSavedPrompt: () => createSavedPrompt,
-  createVideo: () => createVideo,
-  deleteProject: () => deleteProject,
-  deleteSavedPrompt: () => deleteSavedPrompt,
-  deleteVideo: () => deleteVideo,
-  getAllAdminSettings: () => getAllAdminSettings,
-  getAllFeatureFlags: () => getAllFeatureFlags,
-  getAllPricingRules: () => getAllPricingRules,
-  getAllProjectsForAdmin: () => getAllProjectsForAdmin,
-  getAllServices: () => getAllServices,
-  getDb: () => getDb,
-  getFeatureFlagValue: () => getFeatureFlagValue,
-  getJobById: () => getJobById,
-  getPharmaTemplateById: () => getPharmaTemplateById,
-  getPharmaTemplates: () => getPharmaTemplates,
-  getProjectById: () => getProjectById,
-  getPublicVideos: () => getPublicVideos,
-  getSavedPromptById: () => getSavedPromptById,
-  getServiceById: () => getServiceById,
-  getUserByOpenId: () => getUserByOpenId,
-  getUserProjects: () => getUserProjects,
-  getUserSavedPrompts: () => getUserSavedPrompts,
-  getUserVideoCount: () => getUserVideoCount,
-  getUserVideos: () => getUserVideos,
-  getVideoById: () => getVideoById,
-  getVideoByJobId: () => getVideoByJobId,
-  incrementPromptUseCount: () => incrementPromptUseCount,
-  listAlerts: () => listAlerts,
-  updateJob: () => updateJob,
-  updateProject: () => updateProject,
-  updateSavedPrompt: () => updateSavedPrompt,
-  updateVideo: () => updateVideo,
-  upsertAdminSetting: () => upsertAdminSetting,
-  upsertFeatureFlag: () => upsertFeatureFlag,
-  upsertPricingRule: () => upsertPricingRule,
-  upsertUser: () => upsertUser
-});
-import { eq, desc, sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
-async function getDb() {
-  if (!_db) {
-    if (!process.env.DATABASE_URL) {
-      console.error("[Database] DATABASE_URL is not set! DB operations will fail.");
-      return null;
-    }
-    try {
-      const client = postgres(process.env.DATABASE_URL);
-      _db = drizzle(client);
-      console.log("[Database] Connection initialized successfully");
-    } catch (error) {
-      console.error("[Database] Failed to connect:", error);
-      _db = null;
-    }
-  }
-  return _db;
-}
-async function upsertUser(user) {
-  if (!user.openId) {
-    throw new Error("User openId is required for upsert");
-  }
-  const db = await getDb();
-  if (!db) {
-    console.warn("[Database] Cannot upsert user: database not available");
-    return;
-  }
-  try {
-    const values = {
-      openId: user.openId
-    };
-    const updateSet = {};
-    const textFields = ["name", "email", "loginMethod"];
-    const assignNullable = (field) => {
-      const value = user[field];
-      if (value === void 0) return;
-      const normalized = value ?? null;
-      values[field] = normalized;
-      updateSet[field] = normalized;
-    };
-    textFields.forEach(assignNullable);
-    if (user.lastSignedIn !== void 0) {
-      values.lastSignedIn = user.lastSignedIn;
-      updateSet.lastSignedIn = user.lastSignedIn;
-    }
-    if (user.role !== void 0) {
-      values.role = user.role;
-      updateSet.role = user.role;
-    } else if (user.openId === ENV.ownerOpenId) {
-      values.role = "admin";
-      updateSet.role = "admin";
-    }
-    if (!values.lastSignedIn) {
-      values.lastSignedIn = /* @__PURE__ */ new Date();
-    }
-    if (Object.keys(updateSet).length === 0) {
-      updateSet.lastSignedIn = /* @__PURE__ */ new Date();
-    }
-    await db.insert(users).values(values).onConflictDoUpdate({
-      target: users.openId,
-      set: updateSet
-    });
-  } catch (error) {
-    console.error("[Database] Failed to upsert user:", error);
-    throw error;
-  }
-}
-async function getUserByOpenId(openId) {
-  const db = await getDb();
-  if (!db) {
-    console.warn("[Database] Cannot get user: database not available");
-    return void 0;
-  }
-  const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
-  return result.length > 0 ? result[0] : void 0;
-}
-async function getUserProjects(userId) {
-  const db = await getDb();
-  if (!db) return [];
-  return db.select().from(projects).where(eq(projects.userId, userId)).orderBy(desc(projects.createdAt));
-}
-async function getProjectById(projectId) {
-  const db = await getDb();
-  if (!db) return void 0;
-  const result = await db.select().from(projects).where(eq(projects.id, projectId)).limit(1);
-  return result.length > 0 ? result[0] : void 0;
-}
-async function createProject(userId, data) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  const result = await db.insert(projects).values({ ...data, userId });
-  return result;
-}
-async function updateProject(projectId, data) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  return db.update(projects).set(data).where(eq(projects.id, projectId));
-}
-async function deleteProject(projectId) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  return db.delete(projects).where(eq(projects.id, projectId));
-}
-async function getAllProjectsForAdmin() {
-  const db = await getDb();
-  if (!db) return [];
-  return db.select().from(projects).orderBy(desc(projects.createdAt));
-}
-async function createJob(job) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  return db.insert(jobs).values(job);
-}
-async function updateJob(jobId, data) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  return db.update(jobs).set(data).where(eq(jobs.id, jobId));
-}
-async function getJobById(jobId) {
-  const db = await getDb();
-  if (!db) return void 0;
-  const result = await db.select().from(jobs).where(eq(jobs.id, jobId)).limit(1);
-  return result.length > 0 ? result[0] : void 0;
-}
-async function getAllServices() {
-  const db = await getDb();
-  if (!db) return [];
-  return db.select().from(services);
-}
-async function getServiceById(serviceId) {
-  const db = await getDb();
-  if (!db) return void 0;
-  const result = await db.select().from(services).where(eq(services.id, serviceId)).limit(1);
-  return result.length > 0 ? result[0] : void 0;
-}
-async function getPharmaTemplates() {
-  const db = await getDb();
-  if (!db) return [];
-  return db.select().from(pharmaTemplates);
-}
-async function getPharmaTemplateById(templateId) {
-  const db = await getDb();
-  if (!db) return void 0;
-  const result = await db.select().from(pharmaTemplates).where(eq(pharmaTemplates.id, templateId)).limit(1);
-  return result.length > 0 ? result[0] : void 0;
-}
-async function getAllFeatureFlags() {
-  const db = await getDb();
-  if (!db) return [];
-  return db.select().from(featureFlags);
-}
-async function getFeatureFlagValue(key) {
-  const db = await getDb();
-  if (!db) return void 0;
-  const result = await db.select().from(featureFlags).where(eq(featureFlags.key, key)).limit(1);
-  if (result.length === 0) return void 0;
-  return Boolean(result[0].enabled);
-}
-async function upsertFeatureFlag(flag) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  return db.insert(featureFlags).values(flag).onConflictDoUpdate({
-    target: featureFlags.key,
-    set: {
-      enabled: flag.enabled,
-      description: flag.description ?? null
-    }
-  });
-}
-async function getAllPricingRules() {
-  const db = await getDb();
-  if (!db) return [];
-  return db.select().from(pricingRules);
-}
-async function upsertPricingRule(rule) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  return db.insert(pricingRules).values(rule).onConflictDoUpdate({
-    target: pricingRules.key,
-    set: {
-      costCents: rule.costCents,
-      priceCents: rule.priceCents
-    }
-  });
-}
-async function getAllAdminSettings() {
-  const db = await getDb();
-  if (!db) return [];
-  return db.select().from(adminSettings);
-}
-async function upsertAdminSetting(setting) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  return db.insert(adminSettings).values(setting).onConflictDoUpdate({
-    target: adminSettings.key,
-    set: {
-      value: setting.value
-    }
-  });
-}
-async function createAlert(alert) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  return db.insert(alerts).values(alert);
-}
-async function listAlerts(limit = 50) {
-  const db = await getDb();
-  if (!db) return [];
-  return db.select().from(alerts).orderBy(desc(alerts.createdAt)).limit(limit);
-}
-async function createVideo(video) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  const result = await db.insert(videos).values(video).returning();
-  return result[0];
-}
-async function getUserVideos(userId, limit = 50, offset = 0) {
-  const db = await getDb();
-  if (!db) return [];
-  return db.select().from(videos).where(eq(videos.userId, userId)).orderBy(desc(videos.createdAt)).limit(limit).offset(offset);
-}
-async function getVideoById(videoId) {
-  const db = await getDb();
-  if (!db) return void 0;
-  const result = await db.select().from(videos).where(eq(videos.id, videoId)).limit(1);
-  return result.length > 0 ? result[0] : void 0;
-}
-async function getVideoByJobId(jobId) {
-  const db = await getDb();
-  if (!db) return void 0;
-  const result = await db.select().from(videos).where(eq(videos.jobId, jobId)).limit(1);
-  return result.length > 0 ? result[0] : void 0;
-}
-async function updateVideo(videoId, data) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  return db.update(videos).set(data).where(eq(videos.id, videoId));
-}
-async function deleteVideo(videoId) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  return db.delete(videos).where(eq(videos.id, videoId));
-}
-async function getPublicVideos(limit = 20) {
-  const db = await getDb();
-  if (!db) return [];
-  return db.select().from(videos).where(eq(videos.isPublic, 1)).orderBy(desc(videos.createdAt)).limit(limit);
-}
-async function getUserVideoCount(userId) {
-  const db = await getDb();
-  if (!db) return 0;
-  const result = await db.select({ count: sql`count(*)` }).from(videos).where(eq(videos.userId, userId));
-  return result[0]?.count ?? 0;
-}
-async function createSavedPrompt(prompt) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  const result = await db.insert(savedPrompts).values(prompt).returning();
-  return result[0];
-}
-async function getUserSavedPrompts(userId) {
-  const db = await getDb();
-  if (!db) return [];
-  return db.select().from(savedPrompts).where(eq(savedPrompts.userId, userId)).orderBy(desc(savedPrompts.isFavorite), desc(savedPrompts.useCount), desc(savedPrompts.createdAt));
-}
-async function getSavedPromptById(promptId) {
-  const db = await getDb();
-  if (!db) return void 0;
-  const result = await db.select().from(savedPrompts).where(eq(savedPrompts.id, promptId)).limit(1);
-  return result.length > 0 ? result[0] : void 0;
-}
-async function updateSavedPrompt(promptId, data) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  return db.update(savedPrompts).set(data).where(eq(savedPrompts.id, promptId));
-}
-async function incrementPromptUseCount(promptId) {
-  const db = await getDb();
-  if (!db) return;
-  await db.update(savedPrompts).set({ useCount: sql`${savedPrompts.useCount} + 1` }).where(eq(savedPrompts.id, promptId));
-}
-async function deleteSavedPrompt(promptId) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  return db.delete(savedPrompts).where(eq(savedPrompts.id, promptId));
-}
-var _db;
-var init_db = __esm({
-  "server/db.ts"() {
-    "use strict";
-    init_schema();
-    init_env();
-    _db = null;
-  }
-});
-
 // api/index.ts
 import "dotenv/config";
 import express from "express";
@@ -642,8 +125,21 @@ function getSessionCookieOptions(req) {
 import { z } from "zod";
 
 // server/_core/notification.ts
-init_env();
 import { TRPCError } from "@trpc/server";
+
+// server/_core/env.ts
+var ENV = {
+  appId: process.env.VITE_APP_ID ?? "",
+  cookieSecret: process.env.JWT_SECRET ?? "",
+  databaseUrl: process.env.DATABASE_URL ?? "",
+  oAuthServerUrl: process.env.OAUTH_SERVER_URL ?? "",
+  ownerOpenId: process.env.OWNER_OPEN_ID ?? "",
+  isProduction: process.env.NODE_ENV === "production",
+  forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
+  forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? ""
+};
+
+// server/_core/notification.ts
 var TITLE_MAX_LENGTH = 1200;
 var CONTENT_MAX_LENGTH = 2e4;
 var trimValue = (value) => value.trim();
@@ -820,8 +316,427 @@ var systemRouter = router({
 import { TRPCError as TRPCError4 } from "@trpc/server";
 
 // server/_core/alerts.ts
-init_db();
 import { createHmac } from "crypto";
+
+// server/db.ts
+import { eq, desc, sql } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
+
+// drizzle/schema.ts
+import { integer, pgEnum, pgTable, text, timestamp, varchar, serial } from "drizzle-orm/pg-core";
+var roleEnum = pgEnum("role", ["user", "admin"]);
+var users = pgTable("users", {
+  /**
+   * Surrogate primary key. Auto-incremented numeric value managed by the database.
+   * Use this for relations between tables.
+   */
+  id: serial("id").primaryKey(),
+  /** Manus OAuth identifier (openId) returned from the OAuth callback. Unique per user. */
+  openId: varchar("openId", { length: 64 }).notNull().unique(),
+  name: text("name"),
+  email: varchar("email", { length: 320 }),
+  loginMethod: varchar("loginMethod", { length: 64 }),
+  role: roleEnum("role").default("user").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+  lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
+  encryptedApiKeys: text("encryptedApiKeys")
+});
+var projectStatusEnum = pgEnum("project_status", ["draft", "generating", "completed", "failed"]);
+var projects = pgTable("projects", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+  serviceId: varchar("serviceId", { length: 64 }).notNull(),
+  status: projectStatusEnum("status").default("draft").notNull(),
+  prompt: text("prompt"),
+  settings: text("settings"),
+  // JSON string for service-specific settings
+  videoUrl: varchar("videoUrl", { length: 512 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull()
+});
+var jobStatusEnum = pgEnum("job_status", ["queued", "processing", "completed", "failed"]);
+var jobs = pgTable("jobs", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  userId: integer("userId").notNull(),
+  status: jobStatusEnum("status").default("queued").notNull(),
+  inputUrl: text("inputUrl").notNull(),
+  operations: text("operations").notNull(),
+  // JSON string
+  currentStep: integer("currentStep").default(0).notNull(),
+  outputUrl: text("outputUrl"),
+  stepResults: text("stepResults"),
+  error: text("error"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+  completedAt: timestamp("completedAt")
+});
+var categoryEnum = pgEnum("category", ["general", "pharma", "specialized"]);
+var services = pgTable("services", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  category: categoryEnum("category").default("general").notNull(),
+  description: text("description"),
+  capabilities: text("capabilities"),
+  // JSON array of capability strings
+  pricing: varchar("pricing", { length: 255 }),
+  website: varchar("website", { length: 512 }),
+  icon: varchar("icon", { length: 512 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull()
+});
+var pharmaTemplates = pgTable("pharmaTemplates", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+  category: varchar("category", { length: 128 }).notNull(),
+  // e.g., "ligand-binding", "antibody-conjugate"
+  parameters: text("parameters"),
+  // JSON schema for configurable parameters
+  previewImage: varchar("previewImage", { length: 512 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull()
+});
+var featureFlags = pgTable("featureFlags", {
+  key: varchar("key", { length: 128 }).primaryKey(),
+  enabled: integer("enabled").default(1).notNull(),
+  description: text("description"),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull()
+});
+var pricingRules = pgTable("pricingRules", {
+  key: varchar("key", { length: 64 }).primaryKey(),
+  costCents: integer("costCents").default(0).notNull(),
+  priceCents: integer("priceCents").default(0).notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull()
+});
+var adminSettings = pgTable("adminSettings", {
+  key: varchar("key", { length: 64 }).primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull()
+});
+var alertLevelEnum = pgEnum("alert_level", ["info", "warning", "critical"]);
+var alerts = pgTable("alerts", {
+  id: serial("id").primaryKey(),
+  level: alertLevelEnum("level").notNull(),
+  title: varchar("title", { length: 255 }).notNull(),
+  message: text("message").notNull(),
+  jobId: varchar("jobId", { length: 64 }),
+  userId: integer("userId"),
+  error: text("error"),
+  action: text("action"),
+  costCents: integer("costCents"),
+  createdAt: timestamp("createdAt").defaultNow().notNull()
+});
+var videoStatusEnum = pgEnum("video_status", ["processing", "completed", "failed"]);
+var videos = pgTable("videos", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  jobId: varchar("jobId", { length: 64 }),
+  prompt: text("prompt").notNull(),
+  negativePrompt: text("negativePrompt"),
+  model: varchar("model", { length: 50 }).notNull(),
+  width: integer("width"),
+  height: integer("height"),
+  numFrames: integer("numFrames"),
+  fps: integer("fps"),
+  seed: integer("seed"),
+  videoUrl: text("videoUrl").notNull(),
+  thumbnailUrl: text("thumbnailUrl"),
+  durationSeconds: integer("durationSeconds"),
+  fileSizeBytes: integer("fileSizeBytes"),
+  status: videoStatusEnum("status").default("completed").notNull(),
+  isPublic: integer("isPublic").default(0).notNull(),
+  metadata: text("metadata"),
+  // JSON for additional data
+  createdAt: timestamp("createdAt").defaultNow().notNull()
+});
+var savedPrompts = pgTable("savedPrompts", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
+  prompt: text("prompt").notNull(),
+  negativePrompt: text("negativePrompt"),
+  model: varchar("model", { length: 50 }),
+  settings: text("settings"),
+  // JSON for generation settings
+  isFavorite: integer("isFavorite").default(0).notNull(),
+  useCount: integer("useCount").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull()
+});
+
+// server/db.ts
+var _db = null;
+async function getDb() {
+  if (!_db) {
+    if (!process.env.DATABASE_URL) {
+      console.error("[Database] DATABASE_URL is not set! DB operations will fail.");
+      return null;
+    }
+    try {
+      const client = postgres(process.env.DATABASE_URL);
+      _db = drizzle(client);
+      console.log("[Database] Connection initialized successfully");
+    } catch (error) {
+      console.error("[Database] Failed to connect:", error);
+      _db = null;
+    }
+  }
+  return _db;
+}
+async function upsertUser(user) {
+  if (!user.openId) {
+    throw new Error("User openId is required for upsert");
+  }
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot upsert user: database not available");
+    return;
+  }
+  try {
+    const values = {
+      openId: user.openId
+    };
+    const updateSet = {};
+    const textFields = ["name", "email", "loginMethod"];
+    const assignNullable = (field) => {
+      const value = user[field];
+      if (value === void 0) return;
+      const normalized = value ?? null;
+      values[field] = normalized;
+      updateSet[field] = normalized;
+    };
+    textFields.forEach(assignNullable);
+    if (user.lastSignedIn !== void 0) {
+      values.lastSignedIn = user.lastSignedIn;
+      updateSet.lastSignedIn = user.lastSignedIn;
+    }
+    if (user.role !== void 0) {
+      values.role = user.role;
+      updateSet.role = user.role;
+    } else if (user.openId === ENV.ownerOpenId) {
+      values.role = "admin";
+      updateSet.role = "admin";
+    }
+    if (!values.lastSignedIn) {
+      values.lastSignedIn = /* @__PURE__ */ new Date();
+    }
+    if (Object.keys(updateSet).length === 0) {
+      updateSet.lastSignedIn = /* @__PURE__ */ new Date();
+    }
+    await db.insert(users).values(values).onConflictDoUpdate({
+      target: users.openId,
+      set: updateSet
+    });
+  } catch (error) {
+    console.error("[Database] Failed to upsert user:", error);
+    throw error;
+  }
+}
+async function getUserByOpenId(openId) {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot get user: database not available");
+    return void 0;
+  }
+  const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
+  return result.length > 0 ? result[0] : void 0;
+}
+async function getUserProjects(userId) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(projects).where(eq(projects.userId, userId)).orderBy(desc(projects.createdAt));
+}
+async function getProjectById(projectId) {
+  const db = await getDb();
+  if (!db) return void 0;
+  const result = await db.select().from(projects).where(eq(projects.id, projectId)).limit(1);
+  return result.length > 0 ? result[0] : void 0;
+}
+async function createProject(userId, data) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(projects).values({ ...data, userId });
+  return result;
+}
+async function updateProject(projectId, data) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.update(projects).set(data).where(eq(projects.id, projectId));
+}
+async function deleteProject(projectId) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.delete(projects).where(eq(projects.id, projectId));
+}
+async function getAllProjectsForAdmin() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(projects).orderBy(desc(projects.createdAt));
+}
+async function createJob(job) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.insert(jobs).values(job);
+}
+async function getJobById(jobId) {
+  const db = await getDb();
+  if (!db) return void 0;
+  const result = await db.select().from(jobs).where(eq(jobs.id, jobId)).limit(1);
+  return result.length > 0 ? result[0] : void 0;
+}
+async function getAllServices() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(services);
+}
+async function getServiceById(serviceId) {
+  const db = await getDb();
+  if (!db) return void 0;
+  const result = await db.select().from(services).where(eq(services.id, serviceId)).limit(1);
+  return result.length > 0 ? result[0] : void 0;
+}
+async function getPharmaTemplates() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(pharmaTemplates);
+}
+async function getPharmaTemplateById(templateId) {
+  const db = await getDb();
+  if (!db) return void 0;
+  const result = await db.select().from(pharmaTemplates).where(eq(pharmaTemplates.id, templateId)).limit(1);
+  return result.length > 0 ? result[0] : void 0;
+}
+async function getAllFeatureFlags() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(featureFlags);
+}
+async function getFeatureFlagValue(key) {
+  const db = await getDb();
+  if (!db) return void 0;
+  const result = await db.select().from(featureFlags).where(eq(featureFlags.key, key)).limit(1);
+  if (result.length === 0) return void 0;
+  return Boolean(result[0].enabled);
+}
+async function upsertFeatureFlag(flag) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.insert(featureFlags).values(flag).onConflictDoUpdate({
+    target: featureFlags.key,
+    set: {
+      enabled: flag.enabled,
+      description: flag.description ?? null
+    }
+  });
+}
+async function getAllPricingRules() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(pricingRules);
+}
+async function upsertPricingRule(rule) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.insert(pricingRules).values(rule).onConflictDoUpdate({
+    target: pricingRules.key,
+    set: {
+      costCents: rule.costCents,
+      priceCents: rule.priceCents
+    }
+  });
+}
+async function getAllAdminSettings() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(adminSettings);
+}
+async function upsertAdminSetting(setting) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.insert(adminSettings).values(setting).onConflictDoUpdate({
+    target: adminSettings.key,
+    set: {
+      value: setting.value
+    }
+  });
+}
+async function createAlert(alert) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.insert(alerts).values(alert);
+}
+async function listAlerts(limit = 50) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(alerts).orderBy(desc(alerts.createdAt)).limit(limit);
+}
+async function getUserVideos(userId, limit = 50, offset = 0) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(videos).where(eq(videos.userId, userId)).orderBy(desc(videos.createdAt)).limit(limit).offset(offset);
+}
+async function getVideoById(videoId) {
+  const db = await getDb();
+  if (!db) return void 0;
+  const result = await db.select().from(videos).where(eq(videos.id, videoId)).limit(1);
+  return result.length > 0 ? result[0] : void 0;
+}
+async function updateVideo(videoId, data) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.update(videos).set(data).where(eq(videos.id, videoId));
+}
+async function deleteVideo(videoId) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.delete(videos).where(eq(videos.id, videoId));
+}
+async function getPublicVideos(limit = 20) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(videos).where(eq(videos.isPublic, 1)).orderBy(desc(videos.createdAt)).limit(limit);
+}
+async function getUserVideoCount(userId) {
+  const db = await getDb();
+  if (!db) return 0;
+  const result = await db.select({ count: sql`count(*)` }).from(videos).where(eq(videos.userId, userId));
+  return result[0]?.count ?? 0;
+}
+async function createSavedPrompt(prompt) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(savedPrompts).values(prompt).returning();
+  return result[0];
+}
+async function getUserSavedPrompts(userId) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(savedPrompts).where(eq(savedPrompts.userId, userId)).orderBy(desc(savedPrompts.isFavorite), desc(savedPrompts.useCount), desc(savedPrompts.createdAt));
+}
+async function getSavedPromptById(promptId) {
+  const db = await getDb();
+  if (!db) return void 0;
+  const result = await db.select().from(savedPrompts).where(eq(savedPrompts.id, promptId)).limit(1);
+  return result.length > 0 ? result[0] : void 0;
+}
+async function updateSavedPrompt(promptId, data) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.update(savedPrompts).set(data).where(eq(savedPrompts.id, promptId));
+}
+async function incrementPromptUseCount(promptId) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(savedPrompts).set({ useCount: sql`${savedPrompts.useCount} + 1` }).where(eq(savedPrompts.id, promptId));
+}
+async function deleteSavedPrompt(promptId) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.delete(savedPrompts).where(eq(savedPrompts.id, promptId));
+}
+
+// server/_core/alerts.ts
 var DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL?.trim();
 var TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN?.trim();
 var TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID?.trim();
@@ -910,9 +825,6 @@ var AlertService = class {
   }
 };
 var alerts2 = new AlertService();
-
-// server/routers.ts
-init_db();
 
 // server/mockData.ts
 var mockServices = [
@@ -1063,7 +975,6 @@ var mockPharmaTemplates = [
 ];
 
 // server/routers.ts
-init_schema();
 var mockDataInitialized = false;
 async function initializeMockData() {
   if (mockDataInitialized) return;
@@ -1558,7 +1469,6 @@ var appRouter = router({
 });
 
 // server/_core/context.ts
-init_db();
 import { createClient } from "@supabase/supabase-js";
 var supabase = createClient(
   process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL ?? "",
@@ -1626,30 +1536,34 @@ app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", timestamp: (/* @__PURE__ */ new Date()).toISOString() });
 });
 app.get("/api/health/db", async (_req, res) => {
+  const dbUrl = process.env.DATABASE_URL;
+  if (!dbUrl) {
+    res.status(503).json({
+      status: "error",
+      error: "DATABASE_URL not set",
+      hasDbUrl: false,
+      timestamp: (/* @__PURE__ */ new Date()).toISOString()
+    });
+    return;
+  }
   try {
-    const { getDb: getDb2 } = await Promise.resolve().then(() => (init_db(), db_exports));
-    const db = await getDb2();
-    if (!db) {
-      res.status(503).json({
-        status: "error",
-        error: "Database not available",
-        hasDbUrl: !!process.env.DATABASE_URL,
-        timestamp: (/* @__PURE__ */ new Date()).toISOString()
-      });
-      return;
-    }
-    const { sql: sql2 } = await import("drizzle-orm");
-    await db.execute(sql2`SELECT 1`);
+    const pg = (await import("postgres")).default;
+    const sql2 = pg(dbUrl, { connect_timeout: 10 });
+    const result = await sql2`SELECT 1 as ok`;
+    await sql2.end();
     res.json({
       status: "ok",
       database: "connected",
+      result: result[0],
+      dbHost: dbUrl.split("@")[1]?.split("/")[0] ?? "unknown",
       timestamp: (/* @__PURE__ */ new Date()).toISOString()
     });
   } catch (error) {
     res.status(503).json({
       status: "error",
       error: error.message,
-      hasDbUrl: !!process.env.DATABASE_URL,
+      code: error.code,
+      dbHost: dbUrl.split("@")[1]?.split("/")[0] ?? "unknown",
       timestamp: (/* @__PURE__ */ new Date()).toISOString()
     });
   }
