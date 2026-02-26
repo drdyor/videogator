@@ -1,10 +1,10 @@
 {
-  "buildCommand": "pnpm run build:client",
+  "buildCommand": "pnpm run build:all",
   "outputDirectory": "dist/public",
   "installCommand": "pnpm install",
   "framework": null,
   "functions": {
-    "api/index.js": {
+    "api/index.mjs": {
       "memory": 256,
       "maxDuration": 30
     }
