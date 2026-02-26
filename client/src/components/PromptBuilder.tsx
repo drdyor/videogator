@@ -14,13 +14,13 @@ import {
   RotateCcw,
   Copy,
   Check,
-  ChevronDown,
-  ChevronUp,
   Pen,
   Sparkles,
-  Film,
-  BookOpen,
 } from "lucide-react";
+import CineEducator from "@/components/CineEducator";
+import RecipeCard from "@/components/RecipeCard";
+import EmotionArcBuilder, { CustomArcList, loadCustomArcs } from "@/components/EmotionArcBuilder";
+import PromptEnhancer from "@/components/PromptEnhancer";
 import {
   EMOTION_ARCS,
   SCENE_ARCHETYPES,
@@ -29,7 +29,6 @@ import {
   PRESET_RECIPES,
   ALL_TAGS,
   buildPrompt,
-  getInsights,
   type EmotionArc,
   type SceneArchetype,
   type CharacterStrategy,
@@ -50,9 +49,9 @@ export default function PromptBuilder({ value, onChange }: PromptBuilderProps) {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [selectedStrategy, setSelectedStrategy] = useState<CharacterStrategy | null>(null);
   const [showRecipes, setShowRecipes] = useState(false);
-  const [showFilmSchool, setShowFilmSchool] = useState(false);
   const [copied, setCopied] = useState(false);
   const [activeTab, setActiveTab] = useState("emotion");
+  const [customArcs, setCustomArcs] = useState<EmotionArc[]>(() => loadCustomArcs());
 
   // Filter archetypes by selected emotion
   const filteredArchetypes = useMemo(
@@ -62,9 +61,6 @@ export default function PromptBuilder({ value, onChange }: PromptBuilderProps) {
         : SCENE_ARCHETYPES,
     [selectedEmotion]
   );
-
-  // Get contextual insights
-  const insights = useMemo(() => getInsights(selectedTags), [selectedTags]);
 
   // Build prompt from selections
   const assembledPrompt = useMemo(
@@ -190,15 +186,18 @@ export default function PromptBuilder({ value, onChange }: PromptBuilderProps) {
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <span className="text-sm font-medium text-muted-foreground">Prompt</span>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-xs text-gold"
-            onClick={() => setMode("builder")}
-          >
-            <Wand2 className="w-3 h-3 mr-1" />
-            Prompt Builder
-          </Button>
+          <div className="flex items-center gap-1">
+            <PromptEnhancer prompt={value} onEnhanced={onChange} />
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs text-gold"
+              onClick={() => setMode("builder")}
+            >
+              <Wand2 className="w-3 h-3 mr-1" />
+              Prompt Builder
+            </Button>
+          </div>
         </div>
         <Textarea
           value={value}
@@ -257,16 +256,11 @@ export default function PromptBuilder({ value, onChange }: PromptBuilderProps) {
           </div>
           <div className="grid gap-2 sm:grid-cols-2">
             {PRESET_RECIPES.map((recipe) => (
-              <button
+              <RecipeCard
                 key={recipe.id}
-                onClick={() => applyRecipe(recipe)}
-                className="text-left rounded-md border border-border/40 p-3 hover:border-gold-dim/40 transition-colors space-y-1"
-              >
-                <span className="text-sm font-semibold">{recipe.label}</span>
-                <p className="text-xs text-muted-foreground line-clamp-2">
-                  {recipe.description}
-                </p>
-              </button>
+                recipe={recipe}
+                onApply={applyRecipe}
+              />
             ))}
           </div>
         </div>
@@ -353,7 +347,7 @@ export default function PromptBuilder({ value, onChange }: PromptBuilderProps) {
         </TabsList>
 
         {/* Emotion Tab */}
-        <TabsContent value="emotion" className="mt-3">
+        <TabsContent value="emotion" className="mt-3 space-y-3">
           <div className="grid gap-2 grid-cols-2 sm:grid-cols-4">
             {EMOTION_ARCS.map((emotion) => (
               <button
@@ -372,7 +366,27 @@ export default function PromptBuilder({ value, onChange }: PromptBuilderProps) {
                 </p>
               </button>
             ))}
+            <EmotionArcBuilder
+              onArcCreated={(arc) => {
+                setCustomArcs((prev) => [...prev, arc]);
+                selectEmotion(arc);
+              }}
+            />
           </div>
+          <CustomArcList
+            arcs={customArcs}
+            selectedId={selectedEmotion?.id ?? null}
+            onSelect={selectEmotion}
+            onDelete={(arcId) => {
+              const updated = customArcs.filter((a) => a.id !== arcId);
+              setCustomArcs(updated);
+              localStorage.setItem("videogator-custom-arcs", JSON.stringify(updated));
+              if (selectedEmotion?.id === arcId) {
+                setSelectedEmotion(null);
+                updateAndApply(selectedTags, null);
+              }
+            }}
+          />
         </TabsContent>
 
         {/* Archetype Tab */}
@@ -479,47 +493,7 @@ export default function PromptBuilder({ value, onChange }: PromptBuilderProps) {
       </Tabs>
 
       {/* Film School Panel */}
-      {insights.length > 0 && (
-        <div className="space-y-2">
-          <button
-            onClick={() => setShowFilmSchool(!showFilmSchool)}
-            className="flex items-center gap-2 text-xs text-gold hover:text-gold/80 transition-colors"
-          >
-            <BookOpen className="w-3 h-3" />
-            <span className="font-semibold">Why This Works</span>
-            {showFilmSchool ? (
-              <ChevronUp className="w-3 h-3" />
-            ) : (
-              <ChevronDown className="w-3 h-3" />
-            )}
-          </button>
-          {showFilmSchool && (
-            <div className="space-y-2">
-              {insights.map((insight, i) => (
-                <div
-                  key={i}
-                  className="rounded-lg border border-gold-dim/20 bg-gold/5 p-3 space-y-1.5"
-                >
-                  <div className="flex items-center gap-2">
-                    <Film className="w-3 h-3 text-gold" />
-                    <span className="text-sm font-semibold text-gold">
-                      {insight.title}
-                    </span>
-                  </div>
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    {insight.explanation}
-                  </p>
-                  {insight.proTip && (
-                    <p className="text-xs text-gold-dim italic">
-                      Pro tip: {insight.proTip}
-                    </p>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+      <CineEducator selectedTags={selectedTags} />
 
       {/* Generated Prompt Preview */}
       {value && (
@@ -528,19 +502,22 @@ export default function PromptBuilder({ value, onChange }: PromptBuilderProps) {
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
               Generated Prompt
             </span>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-xs"
-              onClick={copyPrompt}
-            >
-              {copied ? (
-                <Check className="w-3 h-3 mr-1 text-emerald-500" />
-              ) : (
-                <Copy className="w-3 h-3 mr-1" />
-              )}
-              {copied ? "Copied" : "Copy"}
-            </Button>
+            <div className="flex items-center gap-1">
+              <PromptEnhancer prompt={value} onEnhanced={onChange} />
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-xs"
+                onClick={copyPrompt}
+              >
+                {copied ? (
+                  <Check className="w-3 h-3 mr-1 text-emerald-500" />
+                ) : (
+                  <Copy className="w-3 h-3 mr-1" />
+                )}
+                {copied ? "Copied" : "Copy"}
+              </Button>
+            </div>
           </div>
           <Textarea
             value={value}

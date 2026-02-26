@@ -12,7 +12,7 @@ import { useMemo, useState } from "react";
 import GeneratingAnimation from "@/components/GeneratingAnimation";
 import PromptBuilder from "@/components/PromptBuilder";
 
-type VideoModel = "hunyuan-video" | "mochi" | "cogvideo" | "modelscope" | "stable-video-diffusion";
+type VideoModel = "hunyuan-video" | "mochi" | "cogvideo" | "modelscope" | "stable-video-diffusion" | "wan-2.2" | "wan-2.2-5b" | "ltx-2";
 
 type Operation =
   | { id: string; type: "edit"; action: "trim"; params: { start: number; end: number } }
@@ -30,10 +30,13 @@ type Operation =
     }};
 
 const VIDEO_MODELS: { value: VideoModel; label: string; description: string }[] = [
-  { value: "hunyuan-video", label: "HunyuanVideo", description: "High quality, 848x480, 65 frames" },
-  { value: "mochi", label: "Mochi", description: "High quality, 848x480, 65 frames" },
-  { value: "cogvideo", label: "CogVideoX", description: "Balanced, 720x480, 49 frames" },
-  { value: "modelscope", label: "ModelScope", description: "Fast, 256x256, 16 frames" },
+  { value: "wan-2.2", label: "Wan 2.2 (14B)", description: "Top quality, 832x480, 81 frames, ~16-20GB VRAM" },
+  { value: "wan-2.2-5b", label: "Wan 2.2 (5B)", description: "Great quality + I2V, 832x480, 81 frames, ~10GB VRAM" },
+  { value: "ltx-2", label: "LTX-Video", description: "Fast + audio sync, 768x512, 97 frames, ~16GB VRAM" },
+  { value: "hunyuan-video", label: "HunyuanVideo", description: "High quality, 848x480, 65 frames, ~20GB VRAM" },
+  { value: "mochi", label: "Mochi 1", description: "Photorealism, 848x480, 65 frames, ~16GB VRAM" },
+  { value: "cogvideo", label: "CogVideoX-5B", description: "Efficient 6s clips, 720x480, 49 frames, ~8GB VRAM" },
+  { value: "modelscope", label: "ModelScope", description: "Fast preview, 256x256, 16 frames, ~4GB VRAM" },
   { value: "stable-video-diffusion", label: "SVD (Image-to-Video)", description: "Image animation, 1024x576, 25 frames" },
 ];
 
@@ -43,6 +46,9 @@ const MODEL_DEFAULTS: Record<VideoModel, { width: number; height: number; numFra
   "cogvideo": { width: 720, height: 480, numFrames: 49 },
   "modelscope": { width: 256, height: 256, numFrames: 16 },
   "stable-video-diffusion": { width: 1024, height: 576, numFrames: 25 },
+  "wan-2.2": { width: 832, height: 480, numFrames: 81 },
+  "wan-2.2-5b": { width: 832, height: 480, numFrames: 81 },
+  "ltx-2": { width: 768, height: 512, numFrames: 97 },
 };
 
 function createId() {

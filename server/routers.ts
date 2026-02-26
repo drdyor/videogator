@@ -162,7 +162,7 @@ export const appRouter = router({
     generate: protectedProcedure.input(z.object({
       prompt: z.string(),
       negativePrompt: z.string().optional(),
-      model: z.enum(["hunyuan-video", "mochi", "cogvideo", "modelscope", "stable-video-diffusion"]).optional(),
+      model: z.enum(["hunyuan-video", "mochi", "cogvideo", "modelscope", "stable-video-diffusion", "wan-2.2", "wan-2.2-5b", "ltx-2"]).optional(),
       width: z.number().optional(),
       height: z.number().optional(),
       numFrames: z.number().optional(),
@@ -209,6 +209,45 @@ export const appRouter = router({
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: error instanceof Error ? error.message : "Failed to connect to video server",
+        });
+      }
+    }),
+
+    // Enhance prompt with local LLM via Ollama
+    enhancePrompt: protectedProcedure.input(z.object({
+      prompt: z.string().min(1),
+      model: z.string().optional(),
+    })).mutation(async ({ input }) => {
+      const VIDEO_SERVER_URL = process.env.VIDEO_SERVER_URL;
+      if (!VIDEO_SERVER_URL) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "VIDEO_SERVER_URL is not configured.",
+        });
+      }
+
+      try {
+        const response = await fetch(`${VIDEO_SERVER_URL}/enhance-prompt`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            prompt: input.prompt,
+            model: input.model ?? "qwen2.5:7b",
+          }),
+          signal: AbortSignal.timeout(60000),
+        });
+
+        if (!response.ok) {
+          const detail = await response.text();
+          throw new Error(detail);
+        }
+
+        const data = await response.json() as { original: string; enhanced: string; model: string };
+        return data;
+      } catch (error) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: error instanceof Error ? error.message : "Failed to enhance prompt",
         });
       }
     }),

@@ -44,6 +44,9 @@ class VideoModel(str, Enum):
     MODELSCOPE = "modelscope"
     ANIMATEDIFF = "animatediff"
     SVS = "stable-video-diffusion"
+    WAN_22 = "wan-2.2"
+    WAN_22_5B = "wan-2.2-5b"
+    LTX_2 = "ltx-2"
 
 
 class GenerateRequest(BaseModel):
@@ -139,6 +142,30 @@ MODEL_CONFIGS = {
         default_height=576,
         default_frames=25,
         supports_image_to_video=True,
+    ),
+    VideoModel.WAN_22: ModelConfig(
+        name="Wan 2.2 (14B)",
+        repo_id="Wan-AI/Wan2.2-T2V-14B",
+        default_width=832,
+        default_height=480,
+        default_frames=81,
+        supports_image_to_video=False,
+    ),
+    VideoModel.WAN_22_5B: ModelConfig(
+        name="Wan 2.2 (5B)",
+        repo_id="Wan-AI/Wan2.2-T2V-5B",
+        default_width=832,
+        default_height=480,
+        default_frames=81,
+        supports_image_to_video=True,
+    ),
+    VideoModel.LTX_2: ModelConfig(
+        name="LTX-Video",
+        repo_id="Lightricks/LTX-Video-0.9.7",
+        default_width=768,
+        default_height=512,
+        default_frames=97,
+        supports_image_to_video=False,
     ),
 }
 
@@ -443,6 +470,112 @@ class StableVideoDiffusionGenerator(VideoGenerator):
         return video_path
 
 
+class Wan22Generator(VideoGenerator):
+    """Wan 2.2 text-to-video generator (14B params)"""
+
+    def load_model(self):
+        if self.pipeline is not None:
+            return
+
+        try:
+            from diffusers import WanPipeline
+
+            logger.info(f"Loading {self.config.name} model...")
+
+            dtype = torch.float16 if DEVICE == "cuda" else torch.float32
+
+            self.pipeline = WanPipeline.from_pretrained(
+                self.config.repo_id,
+                torch_dtype=dtype,
+            )
+            self.pipeline.enable_model_cpu_offload()
+
+            logger.info(f"{self.config.name} loaded successfully")
+        except Exception as e:
+            logger.error(f"Failed to load {self.config.name}: {e}")
+            raise
+
+    def generate(self, request: GenerateRequest, output_path: Path) -> Path:
+        from diffusers.utils import export_to_video
+
+        self.load_model()
+
+        generator = torch.Generator(device=DEVICE)
+        if request.seed is not None:
+            generator.manual_seed(request.seed)
+
+        logger.info(f"Generating video with Wan 2.2: {request.prompt[:100]}...")
+
+        result = self.pipeline(
+            prompt=request.prompt,
+            negative_prompt=request.negative_prompt,
+            height=request.height,
+            width=request.width,
+            num_frames=request.num_frames,
+            num_inference_steps=request.num_inference_steps,
+            guidance_scale=request.guidance_scale,
+            generator=generator,
+        )
+
+        video_path = output_path.with_suffix(".mp4")
+        export_to_video(result.frames[0], str(video_path), fps=request.fps)
+
+        return video_path
+
+
+class LTX2Generator(VideoGenerator):
+    """LTX-Video generator"""
+
+    def load_model(self):
+        if self.pipeline is not None:
+            return
+
+        try:
+            from diffusers import LTXPipeline
+
+            logger.info(f"Loading {self.config.name} model...")
+
+            dtype = torch.float16 if DEVICE == "cuda" else torch.float32
+
+            self.pipeline = LTXPipeline.from_pretrained(
+                self.config.repo_id,
+                torch_dtype=dtype,
+            )
+            self.pipeline.enable_model_cpu_offload()
+
+            logger.info(f"{self.config.name} loaded successfully")
+        except Exception as e:
+            logger.error(f"Failed to load {self.config.name}: {e}")
+            raise
+
+    def generate(self, request: GenerateRequest, output_path: Path) -> Path:
+        from diffusers.utils import export_to_video
+
+        self.load_model()
+
+        generator = torch.Generator(device=DEVICE)
+        if request.seed is not None:
+            generator.manual_seed(request.seed)
+
+        logger.info(f"Generating video with LTX-Video: {request.prompt[:100]}...")
+
+        result = self.pipeline(
+            prompt=request.prompt,
+            negative_prompt=request.negative_prompt,
+            height=request.height,
+            width=request.width,
+            num_frames=request.num_frames,
+            num_inference_steps=request.num_inference_steps,
+            guidance_scale=request.guidance_scale,
+            generator=generator,
+        )
+
+        video_path = output_path.with_suffix(".mp4")
+        export_to_video(result.frames[0], str(video_path), fps=request.fps)
+
+        return video_path
+
+
 # Generator factory
 def get_generator(model: VideoModel) -> VideoGenerator:
     generators = {
@@ -451,6 +584,9 @@ def get_generator(model: VideoModel) -> VideoGenerator:
         VideoModel.COGVIDEO: CogVideoGenerator,
         VideoModel.MODELSCOPE: ModelScopeGenerator,
         VideoModel.SVS: StableVideoDiffusionGenerator,
+        VideoModel.WAN_22: Wan22Generator,
+        VideoModel.WAN_22_5B: Wan22Generator,
+        VideoModel.LTX_2: LTX2Generator,
     }
     
     generator_class = generators.get(model)
@@ -595,6 +731,14 @@ async def ollama_generate(request: dict):
         "modelscope": VideoModel.MODELSCOPE,
         "svd": VideoModel.SVS,
         "stable-video": VideoModel.SVS,
+        "wan": VideoModel.WAN_22,
+        "wan-2.2": VideoModel.WAN_22,
+        "wan2.2": VideoModel.WAN_22,
+        "wan-5b": VideoModel.WAN_22_5B,
+        "wan-2.2-5b": VideoModel.WAN_22_5B,
+        "ltx": VideoModel.LTX_2,
+        "ltx-2": VideoModel.LTX_2,
+        "ltx-video": VideoModel.LTX_2,
     }
     
     video_model = model_mapping.get(model.lower(), VideoModel.HUNYUAN_VIDEO)
@@ -635,6 +779,79 @@ async def ollama_generate(request: dict):
         jobs[job_id]["status"] = "failed"
         jobs[job_id]["error"] = str(e)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+class EnhancePromptRequest(BaseModel):
+    prompt: str = Field(..., description="User's rough prompt to enhance")
+    model: str = Field(default="qwen2.5:7b", description="Ollama LLM model name")
+
+
+ENHANCE_SYSTEM_PROMPT = """You are a cinematic video prompt engineer. The user will give you a brief video description. Expand it into a rich, detailed cinematic video generation prompt.
+
+Include specific details about:
+- Camera movement and angle (e.g. slow dolly push-in, low angle, crane shot)
+- Lens choice (e.g. anamorphic, 85mm telephoto, wide angle)
+- Lighting (e.g. golden hour, Rembrandt lighting, neon noir)
+- Color grading (e.g. teal and orange, desaturated, warm vintage)
+- Atmosphere (e.g. fog, rain, dust particles)
+- Composition and framing
+- Mood and emotional tone
+
+Output ONLY the enhanced prompt text. No explanations, no markdown, no labels. Just the prompt."""
+
+
+@app.post("/enhance-prompt")
+async def enhance_prompt(request: EnhancePromptRequest):
+    """
+    Enhance a user's rough prompt using a local LLM via Ollama.
+    """
+    import httpx
+
+    ollama_url = os.getenv("OLLAMA_URL", "http://localhost:11434")
+
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(
+                f"{ollama_url}/api/generate",
+                json={
+                    "model": request.model,
+                    "prompt": request.prompt,
+                    "system": ENHANCE_SYSTEM_PROMPT,
+                    "stream": False,
+                },
+            )
+
+            if response.status_code != 200:
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"Ollama returned status {response.status_code}",
+                )
+
+            data = response.json()
+            enhanced = data.get("response", "").strip()
+
+            if not enhanced:
+                raise HTTPException(
+                    status_code=502,
+                    detail="Ollama returned empty response",
+                )
+
+            return {
+                "original": request.prompt,
+                "enhanced": enhanced,
+                "model": request.model,
+            }
+
+    except httpx.ConnectError:
+        raise HTTPException(
+            status_code=503,
+            detail="Ollama is not running. Start it with: ollama serve",
+        )
+    except httpx.TimeoutException:
+        raise HTTPException(
+            status_code=504,
+            detail="Ollama request timed out",
+        )
 
 
 if __name__ == "__main__":
