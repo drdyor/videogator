@@ -234,8 +234,10 @@ export default function VideoFoundry() {
 
       <Card className="p-6 space-y-4">
         <div>
-          <label className="text-sm font-medium">Input Video URL (optional for text-to-video)</label>
+          <label htmlFor="input-video-url" className="text-sm font-medium">Input Video URL (optional for text-to-video)</label>
           <Input
+            id="input-video-url"
+            name="inputVideoUrl"
             placeholder="https://example.com/video.mp4 - leave empty for text-to-video"
             value={inputUrl}
             onChange={event => setInputUrl(event.target.value)}
@@ -272,8 +274,10 @@ export default function VideoFoundry() {
                 {op.type === "edit" && (
                   <div className="grid gap-3 md:grid-cols-2">
                     <div>
-                      <label className="text-xs text-muted-foreground">Start (sec)</label>
+                      <label htmlFor={`trim-start-${op.id}`} className="text-xs text-muted-foreground">Start (sec)</label>
                       <Input
+                        id={`trim-start-${op.id}`}
+                        name={`trimStart-${op.id}`}
                         type="number"
                         value={op.params.start}
                         onChange={event =>
@@ -283,8 +287,10 @@ export default function VideoFoundry() {
                       />
                     </div>
                     <div>
-                      <label className="text-xs text-muted-foreground">End (sec)</label>
+                      <label htmlFor={`trim-end-${op.id}`} className="text-xs text-muted-foreground">End (sec)</label>
                       <Input
+                        id={`trim-end-${op.id}`}
+                        name={`trimEnd-${op.id}`}
                         type="number"
                         value={op.params.end}
                         onChange={event =>
@@ -300,7 +306,7 @@ export default function VideoFoundry() {
                   <div className="grid gap-4">
                     {/* Model Selection */}
                     <div>
-                      <Label className="text-xs text-muted-foreground">Model</Label>
+                      <Label htmlFor={`generate-model-${op.id}`} className="text-xs text-muted-foreground">Model</Label>
                       <Select
                         value={op.params.model}
                         onValueChange={(value: VideoModel) => {
@@ -313,7 +319,7 @@ export default function VideoFoundry() {
                           });
                         }}
                       >
-                        <SelectTrigger className="mt-1">
+                        <SelectTrigger id={`generate-model-${op.id}`} className="mt-1">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -337,8 +343,10 @@ export default function VideoFoundry() {
 
                     {/* Negative Prompt */}
                     <div>
-                      <Label className="text-xs text-muted-foreground">Negative Prompt</Label>
+                      <Label htmlFor={`negative-prompt-${op.id}`} className="text-xs text-muted-foreground">Negative Prompt</Label>
                       <Input
+                        id={`negative-prompt-${op.id}`}
+                        name={`negativePrompt-${op.id}`}
                         value={op.params.negativePrompt}
                         onChange={event =>
                           updateParams(op.id, { negativePrompt: event.target.value })
@@ -351,8 +359,10 @@ export default function VideoFoundry() {
                     {/* Resolution */}
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <Label className="text-xs text-muted-foreground">Width</Label>
+                        <Label htmlFor={`width-${op.id}`} className="text-xs text-muted-foreground">Width</Label>
                         <Input
+                          id={`width-${op.id}`}
+                          name={`width-${op.id}`}
                           type="number"
                           value={op.params.width}
                           onChange={event =>
@@ -362,8 +372,10 @@ export default function VideoFoundry() {
                         />
                       </div>
                       <div>
-                        <Label className="text-xs text-muted-foreground">Height</Label>
+                        <Label htmlFor={`height-${op.id}`} className="text-xs text-muted-foreground">Height</Label>
                         <Input
+                          id={`height-${op.id}`}
+                          name={`height-${op.id}`}
                           type="number"
                           value={op.params.height}
                           onChange={event =>
@@ -451,8 +463,10 @@ export default function VideoFoundry() {
 
                         {/* Seed */}
                         <div>
-                          <Label className="text-xs text-muted-foreground">Seed (optional)</Label>
+                          <Label htmlFor={`seed-${op.id}`} className="text-xs text-muted-foreground">Seed (optional)</Label>
                           <Input
+                            id={`seed-${op.id}`}
+                            name={`seed-${op.id}`}
                             type="number"
                             value={op.params.seed ?? ""}
                             onChange={event =>

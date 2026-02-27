@@ -17,7 +17,19 @@ const trpcClient = trpc.createClient({
       async headers() {
         const { data } = await supabase.auth.getSession();
         const token = data.session?.access_token;
-        return token ? { Authorization: `Bearer ${token}` } : {};
+        if (token) {
+          return { Authorization: `Bearer ${token}` };
+        }
+
+        if (
+          import.meta.env.DEV &&
+          typeof window !== "undefined" &&
+          localStorage.getItem("dev-bypass-auth") === "true"
+        ) {
+          return { "x-dev-bypass-auth": "true" };
+        }
+
+        return {};
       },
       fetch(input, init) {
         return globalThis.fetch(input, {

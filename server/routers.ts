@@ -151,11 +151,54 @@ export const appRouter = router({
         return cached;
       }
       const job = await db.getJobById(input.jobId);
-      if (!job) {
+      if (job) {
+        await setJobStatusCache(input.jobId, job);
+        return job;
+      }
+
+      const VIDEO_SERVER_URL = process.env.VIDEO_SERVER_URL;
+      if (!VIDEO_SERVER_URL) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Job not found" });
       }
-      await setJobStatusCache(input.jobId, job);
-      return job;
+
+      try {
+        const response = await fetch(`${VIDEO_SERVER_URL}/status/${encodeURIComponent(input.jobId)}`);
+        if (response.status === 404) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Job not found" });
+        }
+        if (!response.ok) {
+          throw new Error(`Video server status error: ${response.statusText}`);
+        }
+
+        const data = await response.json() as {
+          status: string;
+          progress?: number;
+          output_url?: string | null;
+          error?: string | null;
+        };
+
+        const outputUrl = data.output_url
+          ? data.output_url.startsWith("http")
+            ? data.output_url
+            : `${VIDEO_SERVER_URL}${data.output_url}`
+          : undefined;
+
+        return {
+          jobId: input.jobId,
+          status: data.status,
+          progress: data.progress ?? 0,
+          outputUrl,
+          error: data.error ?? undefined,
+        };
+      } catch (error) {
+        if (error instanceof TRPCError) {
+          throw error;
+        }
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: error instanceof Error ? error.message : "Failed to fetch job status",
+        });
+      }
     }),
 
     // Direct generation endpoint (bypasses queue for local server)

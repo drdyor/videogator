@@ -19,6 +19,36 @@ export async function createContext(
 ): Promise<TrpcContext> {
   let user: User | null = null;
 
+  const devBypassHeader = (opts.req as any).headers?.["x-dev-bypass-auth"];
+  const isDevBypass =
+    process.env.NODE_ENV === "development" &&
+    (devBypassHeader === "true" || devBypassHeader === true);
+
+  if (isDevBypass) {
+    try {
+      const openId = "dev-bypass";
+      let localUser = await db.getUserByOpenId(openId);
+      if (!localUser) {
+        await db.upsertUser({
+          openId,
+          name: "Dev User",
+          email: "dev@localhost",
+          role: "admin",
+        });
+        localUser = await db.getUserByOpenId(openId);
+      }
+      user = localUser ?? null;
+    } catch (error) {
+      console.error("[Context] Dev bypass user setup failed:", error);
+    }
+
+    return {
+      req: opts.req,
+      res: opts.res,
+      user,
+    };
+  }
+
   const authHeader = (opts.req as any).headers?.authorization;
   if (authHeader?.startsWith("Bearer ")) {
     const token = authHeader.slice(7);
