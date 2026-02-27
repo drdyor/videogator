@@ -175,6 +175,7 @@ export const appRouter = router({
           progress?: number;
           output_url?: string | null;
           error?: string | null;
+          error_suggestion?: any;
         };
 
         const outputUrl = data.output_url
@@ -189,6 +190,7 @@ export const appRouter = router({
           progress: data.progress ?? 0,
           outputUrl,
           error: data.error ?? undefined,
+          errorSuggestion: data.error_suggestion ?? undefined,
         };
       } catch (error) {
         if (error instanceof TRPCError) {

@@ -8,13 +8,94 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Plus, Play, Trash2, Settings2, Server, CheckCircle2, XCircle, Info, Eye, Film, Lightbulb, Camera, Aperture, Clapperboard } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Loader2, Plus, Play, Trash2, Settings2, Server, CheckCircle2, XCircle, Info, Eye, Film, Lightbulb, Camera, Aperture, Clapperboard, Zap, Gauge, Save, Sparkles } from "lucide-react";
+import { useMemo, useState, useEffect } from "react";
 import GeneratingAnimation from "@/components/GeneratingAnimation";
 import PromptBuilder from "@/components/PromptBuilder";
 import GatorMascot from "@/components/GatorMascot";
 
 type VideoModel = "hunyuan-video" | "mochi" | "cogvideo" | "modelscope" | "stable-video-diffusion" | "wan-2.2" | "wan-2.2-5b" | "ltx-2";
+
+// Model profiles optimized for 4090 (24GB VRAM)
+const MODEL_PROFILES: Record<string, { vram: number; quality: number; speed: string; frames: number; resolution: string; label: string; desc: string }> = {
+  "wan-2.2": { vram: 18, quality: 10, speed: "slow", frames: 81, resolution: "832x480", label: "Wan 2.2 (14B)", desc: "Top quality, cinematic" },
+  "wan-2.2-5b": { vram: 10, quality: 8, speed: "medium", frames: 81, resolution: "832x480", label: "Wan 2.2 (5B)", desc: "Great quality + I2V" },
+  "ltx-2": { vram: 6, quality: 7, speed: "fast", frames: 97, resolution: "768x512", label: "LTX-Video", desc: "Fast + audio sync" },
+  "hunyuan-video": { vram: 20, quality: 9, speed: "slow", frames: 65, resolution: "848x480", label: "HunyuanVideo", desc: "High quality" },
+  "mochi": { vram: 16, quality: 9, speed: "slow", frames: 65, resolution: "848x480", label: "Mochi 1", desc: "Photorealism" },
+  "cogvideo": { vram: 8, quality: 7, speed: "fast", frames: 49, resolution: "720x480", label: "CogVideoX-5B", desc: "Efficient 6s clips" },
+  "modelscope": { vram: 4, quality: 5, speed: "fastest", frames: 16, resolution: "256x256", label: "ModelScope", desc: "Fast preview" },
+  "stable-video-diffusion": { vram: 8, quality: 8, speed: "fast", frames: 25, resolution: "1024x576", label: "SVD (I2V)", desc: "Image animation" },
+};
+
+const GATOR_PRESETS = [
+  { 
+    id: "laboratory", 
+    name: "Gator's Lab", 
+    desc: "Art Deco glassware, vintage science",
+    lens: "50mm",
+    lighting: "high-key",
+    movement: "static",
+    dof: 2.8,
+    why: "Normal lens shows the lab equipment accurately. High key lighting represents scientific clarity and discovery.",
+    filmRef: "Classic scientific documentaries (1950s)"
+  },
+  { 
+    id: "noir-alley", 
+    name: "Noir Alley", 
+    desc: "Rainy street, neon signs",
+    lens: "85mm",
+    lighting: "low-key",
+    movement: "static",
+    dof: 1.4,
+    why: "Telephoto compresses distance. Low key creates mystery - only Gator's eyes visible in shadow.",
+    filmRef: "The Godfather (1972), Blade Runner (1982)"
+  },
+  { 
+    id: "sunset-beach", 
+    name: "Sunset Beach", 
+    desc: "Golden hour, ocean",
+    lens: "35mm",
+    lighting: "high-key",
+    movement: "dolly-out",
+    dof: 8,
+    why: "Wide angle captures the landscape. Dolly out reveals the beautiful sunset context.",
+    filmRef: "From Here to Eternity (1953)"
+  },
+  { 
+    id: "cyberpunk", 
+    name: "Cyberpunk City", 
+    desc: "Futuristic, neon holograms",
+    lens: "14mm",
+    lighting: "chiaroscuro",
+    movement: "tracking",
+    dof: 2.0,
+    why: "Wide angle creates dynamic distorted reflections in neon. Chiaroscuro for dramatic contrast.",
+    filmRef: "Blade Runner (1982), The Matrix (1999)"
+  },
+  { 
+    id: "wild-west", 
+    name: "Wild West", 
+    desc: "Desert, dusty, cactus",
+    lens: "135mm",
+    lighting: "rembrandt",
+    movement: "dolly-in",
+    dof: 4.0,
+    why: "Telephoto isolates Gator against the vast desert. Rembrandt lighting adds western drama.",
+    filmRef: "The Good, The Bad and The Ugly (1966)"
+  },
+  { 
+    id: "space", 
+    name: "Space Station", 
+    desc: "Astronaut, stars",
+    lens: "24mm",
+    lighting: "low-key",
+    movement: "static",
+    dof: 1.8,
+    why: "Wide but not extreme. Low key simulates harsh space lighting. Stars in focus = deep focus technique.",
+    filmRef: "2001: A Space Odyssey (1968)"
+  },
+];
 
 // Video Gator's technical reference data
 const GATOR_LENSES = [
@@ -86,6 +167,7 @@ export default function VideoFoundry() {
   const { isAuthenticated } = useAuth();
   const [inputUrl, setInputUrl] = useState("");
   const [jobId, setJobId] = useState<string | null>(null);
+  const [savedJobs, setSavedJobs] = useState<string[]>([]);
   const [operations, setOperations] = useState<Operation[]>([]);
   
   // Video Gator's current setup (for visual reference)
@@ -94,6 +176,15 @@ export default function VideoFoundry() {
   const [gatorMovement, setGatorMovement] = useState("static");
   const [gatorDof, setGatorDof] = useState(1.4);
   const [showGatorPanel, setShowGatorPanel] = useState(true);
+  const [selectedPreset, setSelectedPreset] = useState<typeof GATOR_PRESETS[0] | null>(null);
+  const [showTeachingMode, setShowTeachingMode] = useState(true);
+  
+  // Saved prompts (The Formulary)
+  const [savedPrompts, setSavedPrompts] = useState<{id: string; name: string; prompt: string; model: string}[]>([
+    { id: "1", name: "Cinematic Intro", prompt: "A majestic establishing shot", model: "wan-2.2" },
+    { id: "2", name: "Action Sequence", prompt: "Dynamic action shot", model: "hunyuan-video" },
+    { id: "3", name: "Moody Portrait", prompt: "Intimate close-up", model: "ltx-2" },
+  ]);
 
   const createJobMutation = trpc.video.create.useMutation();
   const generateMutation = trpc.video.generate.useMutation();
@@ -195,6 +286,7 @@ export default function VideoFoundry() {
           fps: op.params.fps,
         });
         setJobId(result.jobId);
+        addSavedJob(result.jobId);
       } catch (error) {
         console.error("Direct generation failed, falling back to queue:", error);
         // Fall back to queue
@@ -204,6 +296,7 @@ export default function VideoFoundry() {
           operations: payload,
         });
         setJobId(result.jobId);
+        addSavedJob(result.jobId);
       }
       return;
     }
@@ -221,6 +314,34 @@ export default function VideoFoundry() {
       operations: payload,
     });
     setJobId(result.jobId);
+    addSavedJob(result.jobId);
+  };
+
+  // Persist and load saved job IDs to/from localStorage
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("vg_saved_jobs");
+      if (raw) setSavedJobs(JSON.parse(raw));
+    } catch (e) {
+      console.warn("Failed to load saved jobs", e);
+    }
+  }, []);
+
+  const addSavedJob = (id: string) => {
+    setSavedJobs(prev => {
+      if (prev.includes(id)) return prev;
+      const next = [id, ...prev].slice(0, 50);
+      try { localStorage.setItem("vg_saved_jobs", JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+
+  const removeSavedJob = (id: string) => {
+    setSavedJobs(prev => {
+      const next = prev.filter(x => x !== id);
+      try { localStorage.setItem("vg_saved_jobs", JSON.stringify(next)); } catch {}
+      return next;
+    });
   };
 
   if (!isAuthenticated) {
@@ -243,17 +364,15 @@ export default function VideoFoundry() {
         
         {/* Server Status */}
         <Card className="art-deco-card p-3 flex items-center gap-3">
-          <Server className="w-5 h-5 text-gold" />
+          <Gauge className="w-5 h-5 text-gold" />
           <div className="text-sm">
-            <div className="font-medium">Video Server</div>
-            {serverHealthQuery.isLoading ? (
-              <div className="text-gold-dim">Checking...</div>
-            ) : serverAvailable ? (
+            <div className="font-medium">RTX 4090</div>
+            {serverAvailable ? (
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-green-500" />
-                <span>Online</span>
+                <span className="text-green-400">Available</span>
                 <Badge variant="secondary" className="text-xs bg-gold/10 text-gold">
-                  {serverDevice === "cuda" ? `${serverGpu}` : "CPU"}
+                  24GB
                 </Badge>
               </div>
             ) : (
@@ -274,7 +393,10 @@ export default function VideoFoundry() {
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <Clapperboard className="w-5 h-5 text-gold" />
-                <h3 className="font-display font-semibold">Video Gator's Studio</h3>
+                <h3 className="font-display font-semibold">Video Gator Studio</h3>
+                <span className="text-xs bg-gold/20 text-gold px-2 py-0.5 rounded border border-gold/30">
+                  FREE
+                </span>
               </div>
               <Button 
                 variant="ghost" 
@@ -282,7 +404,7 @@ export default function VideoFoundry() {
                 onClick={() => setShowGatorPanel(!showGatorPanel)}
                 className="text-gold-dim"
               >
-                {showGatorPanel ? "Hide" : "Show"} Gator Panel
+                {showGatorPanel ? "Hide" : "Show"} Controls
               </Button>
             </div>
             
@@ -357,10 +479,23 @@ export default function VideoFoundry() {
         <div className="space-y-4">
           {/* Lens Selection */}
           <Card className="art-deco-card p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Camera className="w-4 h-4 text-gold" />
-              <h4 className="font-display text-sm font-semibold">Lens (Focal Length)</h4>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Camera className="w-4 h-4 text-gold" />
+                <h4 className="font-display text-sm font-semibold">Lens (Focal Length)</h4>
+              </div>
+              {showTeachingMode && (
+                <Badge variant="outline" className="text-xs text-gold-dim border-gold-dim/30">
+                  🎓 Learning
+                </Badge>
+              )}
             </div>
+            {showTeachingMode && (
+              <p className="text-xs text-gold-dim mb-3 pb-3 border-b border-gold-dim/20">
+                <span className="text-gold font-medium">Focal length</span> determines angle of view and compression. 
+                Wide = more scene, Tele = isolated subject.
+              </p>
+            )}
             <div className="grid grid-cols-2 gap-2">
               {GATOR_LENSES.map((lens) => (
                 <button
@@ -381,10 +516,23 @@ export default function VideoFoundry() {
           
           {/* Lighting Selection */}
           <Card className="art-deco-card p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Lightbulb className="w-4 h-4 text-gold" />
-              <h4 className="font-display text-sm font-semibold">Lighting Style</h4>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Lightbulb className="w-4 h-4 text-gold" />
+                <h4 className="font-display text-sm font-semibold">Lighting Style</h4>
+              </div>
+              {showTeachingMode && (
+                <Badge variant="outline" className="text-xs text-gold-dim border-gold-dim/30">
+                  🎓 Learning
+                </Badge>
+              )}
             </div>
+            {showTeachingMode && (
+              <p className="text-xs text-gold-dim mb-3 pb-3 border-b border-gold-dim/20">
+                <span className="text-gold font-medium">Lighting ratio</span> = key light ÷ fill light. 
+                High ratio = dramatic shadows (mystery). Low ratio = even lighting (optimistic).
+              </p>
+            )}
             <div className="grid grid-cols-2 gap-2">
               {GATOR_LIGHTING.map((light) => (
                 <button
@@ -405,10 +553,23 @@ export default function VideoFoundry() {
           
           {/* Movement Selection */}
           <Card className="art-deco-card p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Film className="w-4 h-4 text-gold" />
-              <h4 className="font-display text-sm font-semibold">Camera Movement</h4>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Film className="w-4 h-4 text-gold" />
+                <h4 className="font-display text-sm font-semibold">Camera Movement</h4>
+              </div>
+              {showTeachingMode && (
+                <Badge variant="outline" className="text-xs text-gold-dim border-gold-dim/30">
+                  🎓 Learning
+                </Badge>
+              )}
             </div>
+            {showTeachingMode && (
+              <p className="text-xs text-gold-dim mb-3 pb-3 border-b border-gold-dim/20">
+                <span className="text-gold font-medium">Camera movement</span> controls pacing and tension. 
+                Static = stillness (danger). Dolly in = building suspense. Pan = following action.
+              </p>
+            )}
             <div className="grid grid-cols-3 gap-2">
               {GATOR_MOVEMENT.map((move) => (
                 <button
@@ -429,10 +590,23 @@ export default function VideoFoundry() {
           
           {/* Depth of Field */}
           <Card className="art-deco-card p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Aperture className="w-4 h-4 text-gold" />
-              <h4 className="font-display text-sm font-semibold">Aperture (f-stop)</h4>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Aperture className="w-4 h-4 text-gold" />
+                <h4 className="font-display text-sm font-semibold">Aperture (f-stop)</h4>
+              </div>
+              {showTeachingMode && (
+                <Badge variant="outline" className="text-xs text-gold-dim border-gold-dim/30">
+                  🎓 Learning
+                </Badge>
+              )}
             </div>
+            {showTeachingMode && (
+              <p className="text-xs text-gold-dim mb-3 pb-3 border-b border-gold-dim/20">
+                <span className="text-gold font-medium">Lower f-stop</span> = wider aperture = more blur (bokeh). 
+                Higher f-stop = sharper image throughout. f/1.4 = isolate subject. f/16 = everything sharp.
+              </p>
+            )}
             <Slider
               value={[gatorDof]}
               onValueChange={([value]) => setGatorDof(value)}
@@ -449,6 +623,160 @@ export default function VideoFoundry() {
           </Card>
         </div>
       </div>
+
+      {/* Gator Presets (Image Scenes) */}
+      <Card className="art-deco-card p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-gold" />
+            <h3 className="font-display font-semibold">Gator's World - Scene Presets</h3>
+            <span className="text-xs bg-gold/20 text-gold px-2 py-0.5 rounded border border-gold/30">FREE</span>
+          </div>
+          <Button 
+            variant="ghost" 
+            size="sm"
+            onClick={() => setShowTeachingMode(!showTeachingMode)}
+            className={showTeachingMode ? "text-gold" : "text-gold-dim"}
+          >
+            {showTeachingMode ? "🎓 Teaching Mode: ON" : "🎓 Teaching Mode: OFF"}
+          </Button>
+        </div>
+        <p className="text-sm text-gold-dim mb-4">Choose a preset scene for your Gator. Click to see the technical breakdown.</p>
+        
+        <div className="grid grid-cols-3 md:grid-cols-6 gap-3 mb-4">
+          {GATOR_PRESETS.map((preset) => (
+            <button
+              key={preset.id}
+              onClick={() => {
+                setSelectedPreset(preset);
+                setGatorLens(preset.lens);
+                setGatorLighting(preset.lighting);
+                setGatorMovement(preset.movement);
+                setGatorDof(preset.dof);
+              }}
+              className={`aspect-square rounded-lg border transition-all group ${
+                selectedPreset?.id === preset.id 
+                  ? "border-gold bg-gold/20" 
+                  : "border-gold-dim/30 hover:border-gold bg-gold/5"
+              }`}
+            >
+              <div className="text-2xl mb-1">
+                {preset.id === "laboratory" && "🧪"}
+                {preset.id === "noir-alley" && "🌃"}
+                {preset.id === "sunset-beach" && "🌅"}
+                {preset.id === "cyberpunk" && "🌃"}
+                {preset.id === "wild-west" && "🏜️"}
+                {preset.id === "space" && "🚀"}
+              </div>
+              <div className="text-xs text-gold group-hover:text-gold/70">{preset.name}</div>
+            </button>
+          ))}
+        </div>
+
+        {/* Educational Content - Shows when teaching mode is on */}
+        {showTeachingMode && selectedPreset && (
+          <div className="p-4 bg-burgundy/20 border border-gold-dim/30 rounded-lg">
+            <h4 className="font-display font-semibold text-gold mb-2">📚 Technical Breakdown: {selectedPreset.name}</h4>
+            
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+              <div className="text-center p-2 bg-background/50 rounded">
+                <div className="text-xs text-gold-dim">Lens</div>
+                <div className="font-medium text-gold">{selectedPreset.lens}</div>
+              </div>
+              <div className="text-center p-2 bg-background/50 rounded">
+                <div className="text-xs text-gold-dim">Lighting</div>
+                <div className="font-medium text-gold">{selectedPreset.lighting}</div>
+              </div>
+              <div className="text-center p-2 bg-background/50 rounded">
+                <div className="text-xs text-gold-dim">Movement</div>
+                <div className="font-medium text-gold">{selectedPreset.movement}</div>
+              </div>
+              <div className="text-center p-2 bg-background/50 rounded">
+                <div className="text-xs text-gold-dim">Aperture</div>
+                <div className="font-medium text-gold">f/{selectedPreset.dof}</div>
+              </div>
+            </div>
+            
+            <div className="mb-2">
+              <div className="text-xs text-gold-dim mb-1">💡 Why this works:</div>
+              <div className="text-sm text-gold/80">{selectedPreset.why}</div>
+            </div>
+            
+            <div>
+              <div className="text-xs text-gold-dim mb-1">🎬 Film Reference:</div>
+              <div className="text-sm text-gold/80">{selectedPreset.filmRef}</div>
+            </div>
+          </div>
+        )}
+      </Card>
+
+      {/* Saved Prompts - The Formulary */}
+      <Card className="art-deco-card p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Save className="w-5 h-5 text-gold" />
+            <h3 className="font-display font-semibold">The Formulary - Saved Prompts</h3>
+          </div>
+          <Button size="sm" className="bg-gold text-background hover:bg-gold/90">
+            + Save Current
+          </Button>
+        </div>
+        <div className="space-y-2">
+          {savedPrompts.map((prompt) => (
+            <div 
+              key={prompt.id}
+              className="flex items-center justify-between p-3 rounded-lg border border-gold-dim/20 hover:border-gold-dim/50 bg-gold/5 transition-all cursor-pointer group"
+            >
+              <div className="flex-1">
+                <div className="text-sm font-medium text-gold">{prompt.name}</div>
+                <div className="text-xs text-gold-dim truncate">{prompt.prompt}</div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary" className="text-xs bg-gold/10 text-gold">
+                  {MODEL_PROFILES[prompt.model]?.label || prompt.model}
+                </Badge>
+                <Button size="sm" variant="ghost" className="opacity-0 group-hover:opacity-100 text-gold">
+                  Apply
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      {/* Quick Model Presets for 4090 */}
+      <Card className="art-deco-card p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <Zap className="w-5 h-5 text-gold" />
+          <h3 className="font-display font-semibold">Quick Presets - Optimized for Your 4090</h3>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <button className="p-4 rounded-lg border border-gold-dim/30 hover:border-gold bg-gold/5 transition-all text-left group">
+            <div className="text-lg mb-1">⚡</div>
+            <div className="font-medium text-gold">Fast Preview</div>
+            <div className="text-xs text-gold-dim">ModelScope • 4GB</div>
+            <div className="text-xs text-gold-dim mt-1">~16 frames • 256×256</div>
+          </button>
+          <button className="p-4 rounded-lg border border-gold-dim/30 hover:border-gold bg-gold/5 transition-all text-left group">
+            <div className="text-lg mb-1">🎬</div>
+            <div className="font-medium text-gold">Cinematic</div>
+            <div className="text-xs text-gold-dim">Wan 2.2 • 18GB</div>
+            <div className="text-xs text-gold-dim mt-1">~81 frames • 832×480</div>
+          </button>
+          <button className="p-4 rounded-lg border border-gold-dim/30 hover:border-gold bg-gold/5 transition-all text-left group">
+            <div className="text-lg mb-1">🔄</div>
+            <div className="font-medium text-gold">Motion Loop</div>
+            <div className="text-xs text-gold-dim">LTX-Video • 6GB</div>
+            <div className="text-xs text-gold-dim mt-1">~97 frames • 768×512</div>
+          </button>
+          <button className="p-4 rounded-lg border border-gold-dim/30 hover:border-gold bg-gold/5 transition-all text-left group">
+            <div className="text-lg mb-1">💎</div>
+            <div className="font-medium text-gold">High Quality</div>
+            <div className="text-xs text-gold-dim">HunyuanVideo • 20GB</div>
+            <div className="text-xs text-gold-dim mt-1">~65 frames • 848×480</div>
+          </button>
+        </div>
+      </Card>
 
       {/* How to Use */}
       <Card className="art-deco-card p-4 bg-gold/5 border-gold/20">
@@ -468,15 +796,29 @@ export default function VideoFoundry() {
 
       <Card className="art-deco-card p-6 space-y-4">
         <div>
-          <label htmlFor="input-video-url" className="text-sm font-medium">Input Video URL (optional for text-to-video)</label>
+          <div className="flex items-center gap-2">
+            <label htmlFor="input-video-url" className="text-sm font-medium">
+              Start Image (optional)
+            </label>
+            <span className="text-xs bg-gold/20 text-gold px-2 py-0.5 rounded border border-gold/30">
+              🔒 Pro
+            </span>
+          </div>
+          <p className="text-xs text-gold-dim mt-1 mb-2">
+            Use a custom image. Default: Video Gator (free)
+          </p>
           <Input
             id="input-video-url"
             name="inputVideoUrl"
-            placeholder="https://example.com/video.mp4 - leave empty for text-to-video"
+            placeholder="🔒 Pro feature: Enter custom image URL"
             value={inputUrl}
             onChange={event => setInputUrl(event.target.value)}
-            className="mt-2"
+            disabled
+            className="mt-2 opacity-50"
           />
+          <p className="text-xs text-gold-dim mt-1">
+            💡 <span className="text-gold">Free default:</span> Leave empty to use Video Gator as your subject
+          </p>
         </div>
 
         <div className="flex flex-wrap gap-2">
@@ -543,11 +885,12 @@ export default function VideoFoundry() {
                   <div className="grid gap-4">
                     {/* Model Selection */}
                     <div>
-                      <Label htmlFor={`generate-model-${op.id}`} className="text-xs text-muted-foreground">Model</Label>
+                      <Label htmlFor={`generate-model-${op.id}`} className="text-xs text-gold-dim">Model</Label>
                       <Select
                         value={op.params.model}
                         onValueChange={(value: VideoModel) => {
                           const defaults = MODEL_DEFAULTS[value];
+                          const profile = MODEL_PROFILES[value];
                           updateParams(op.id, { 
                             model: value,
                             width: defaults.width,
@@ -560,20 +903,40 @@ export default function VideoFoundry() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {VIDEO_MODELS.map(m => (
-                            <SelectItem key={m.value} value={m.value}>
-                              <div>
-                                <div className="font-medium">{m.label}</div>
-                                <div className="text-xs text-muted-foreground">{m.description}</div>
-                              </div>
-                            </SelectItem>
-                          ))}
+                          {VIDEO_MODELS.map(m => {
+                            const profile = MODEL_PROFILES[m.value];
+                            return (
+                              <SelectItem key={m.value} value={m.value}>
+                                <div className="flex items-center justify-between w-full">
+                                  <div>
+                                    <div className="font-medium">{m.label}</div>
+                                    <div className="text-xs text-muted-foreground">{m.description}</div>
+                                  </div>
+                                  {profile && (
+                                    <Badge variant="secondary" className={`ml-2 text-xs ${profile.vram <= 8 ? 'bg-green-500/20 text-green-400' : profile.vram <= 16 ? 'bg-yellow-500/20 text-yellow-400' : 'bg-red-500/20 text-red-400'}`}>
+                                      {profile.vram}GB VRAM
+                                    </Badge>
+                                  )}
+                                </div>
+                              </SelectItem>
+                            );
+                          })}
                         </SelectContent>
                       </Select>
                     </div>
 
                     {/* Prompt Builder */}
-                    <PromptBuilder
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <Label className="text-xs text-gold-dim">Prompt</Label>
+                        <span className="text-xs bg-gold/10 text-gold px-2 py-0.5 rounded">
+                          🎓 Learn Cinema
+                        </span>
+                      </div>
+                      <p className="text-xs text-gold-dim mb-2">
+                        🎓 These presets teach cinematic techniques. Select tags to learn film language - the AI may not follow perfectly, but you'll learn the vocabulary of cinema!
+                      </p>
+                      <PromptBuilder
                       value={op.params.prompt}
                       onChange={(prompt) => updateParams(op.id, { prompt })}
                     />
@@ -754,6 +1117,31 @@ export default function VideoFoundry() {
         </div>
       </Card>
 
+      {/* Saved Jobs */}
+      {savedJobs.length > 0 && (
+        <Card className="art-deco-card p-4">
+          <div className="flex items-center justify-between mb-2">
+            <div className="font-semibold">Saved Jobs</div>
+            <div className="text-sm text-gold-dim">{savedJobs.length} saved</div>
+          </div>
+          <div className="flex flex-col gap-2">
+            {savedJobs.map(id => (
+              <div key={id} className="flex items-center justify-between">
+                <div className="text-sm text-gold-dim truncate">{id}</div>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="ghost" onClick={() => setJobId(id)}>
+                    <Eye className="w-4 h-4 mr-2" /> View
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => removeSavedJob(id)}>
+                    <Trash2 className="w-4 h-4 mr-2" /> Remove
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
       {/* Show animation when Processing */}
       {jobId && (statusQuery.data as any)?.status === "processing" && (
         <GeneratingAnimation
@@ -774,6 +1162,16 @@ export default function VideoFoundry() {
           <div className="text-sm text-muted-foreground">
             Status: {(statusQuery.data as any)?.status ?? "queued"}
           </div>
+          { (statusQuery.data as any)?.error_suggestion && (
+            <div className="mt-2 p-3 bg-destructive/5 rounded border border-destructive/10">
+              <div className="text-sm font-medium text-destructive">Suggestion to avoid OOM</div>
+              <div className="text-xs text-muted-foreground mt-1">
+                Recommended max frames: {(statusQuery.data as any)?.error_suggestion.recommended_max_frames}
+                {" — "}
+                Experimental max frames: {(statusQuery.data as any)?.error_suggestion.experimental_max_frames}
+              </div>
+            </div>
+          )}
           {outputUrl && (
             <div className="space-y-2">
               <div className="text-sm font-medium">Latest Output</div>

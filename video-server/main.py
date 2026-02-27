@@ -78,6 +78,7 @@ class StatusResponse(BaseModel):
     progress: float
     output_url: Optional[str] = None
     error: Optional[str] = None
+    error_suggestion: Optional[Dict[str, Any]] = None
 
 
 # Job storage (in production, use Redis or database)
@@ -675,6 +676,14 @@ async def health():
 @app.post("/generate", response_model=GenerateResponse)
 async def generate(request: GenerateRequest, background_tasks: BackgroundTasks):
     """Start video generation job"""
+    # Check for required Python packages before accepting the job
+    missing = check_dependencies() if 'check_dependencies' in globals() else []
+    if missing:
+        raise HTTPException(status_code=503, detail={
+            "error": "Missing Python dependencies",
+            "missing": missing,
+            "install": f"pip install {' '.join(missing)}",
+        })
     import uuid
     
     job_id = str(uuid.uuid4())[:8]
@@ -707,6 +716,7 @@ async def get_status(job_id: str):
         progress=job["progress"],
         output_url=job.get("output_url"),
         error=job.get("error"),
+        error_suggestion=job.get("error_suggestion"),
     )
 
 
@@ -870,6 +880,28 @@ def estimate_suggestion_for_request(req: GenerateRequest):
     return estimate_for_model(vram, model)
 
 
+def check_dependencies() -> List[str]:
+    """Return a list of missing Python packages required for generation."""
+    required = ["diffusers", "torch", "transformers", "accelerate"]
+    missing: List[str] = []
+    for pkg in required:
+        try:
+            __import__(pkg)
+        except Exception:
+            missing.append(pkg)
+    return missing
+
+
+@app.get("/diagnose")
+async def diagnose():
+    """Return missing Python package diagnostics and an install suggestion."""
+    missing = check_dependencies()
+    return {
+        "missing": missing,
+        "install_cmd": None if not missing else f"pip install {' '.join(missing)}",
+    }
+
+
 @app.post("/estimate", response_model=EstimateResponse)
 async def estimate(request: EstimateRequest):
     """Estimate recommended frames given available VRAM and model."""
@@ -939,10 +971,17 @@ async def enhance_prompt(request: EnhancePromptRequest):
             }
 
     except httpx.ConnectError:
-        raise HTTPException(
-            status_code=503,
-            detail="Ollama is not running. Start it with: ollama serve",
+        # Ollama not available — return a lightweight heuristic enhancement so UI still works offline
+        logger.warning("Ollama not available, returning local enhancement fallback")
+        enhanced = (
+            request.prompt.strip()
+            + " — cinematic, detailed scene with camera movement, specific lens, dramatic lighting, atmospheric particles, warm color grading, and clear composition."
         )
+        return {
+            "original": request.prompt,
+            "enhanced": enhanced,
+            "model": request.model,
+        }
     except httpx.TimeoutException:
         raise HTTPException(
             status_code=504,
