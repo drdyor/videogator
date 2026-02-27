@@ -61,13 +61,13 @@ export default function DashboardLayout({
 
   if (!user) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="flex flex-col items-center gap-8 p-8 max-w-md w-full">
+      <div className="flex items-center justify-center min-h-screen bg-background film-grain">
+        <div className="flex flex-col items-center gap-8 p-8 max-w-md w-full art-deco-card rounded-lg">
           <div className="flex flex-col items-center gap-6">
-            <h1 className="text-2xl font-semibold tracking-tight text-center">
+            <h1 className="text-2xl font-display font-semibold tracking-tight text-center gold-gradient-text">
               Sign in to continue
             </h1>
-            <p className="text-sm text-muted-foreground text-center max-w-sm">
+            <p className="text-sm text-gold-dim text-center max-w-sm">
               Access to this dashboard requires authentication. Continue to launch the login flow.
             </p>
           </div>
@@ -76,7 +76,7 @@ export default function DashboardLayout({
               window.location.href = getLoginUrl();
             }}
             size="lg"
-            className="w-full shadow-lg hover:shadow-xl transition-all"
+            className="w-full shadow-lg hover:shadow-xl transition-all bg-gold text-background hover:bg-gold/90"
           >
             Sign in
           </Button>
@@ -159,25 +159,25 @@ function DashboardLayoutContent({
 
   return (
     <>
-      <div className="relative" ref={sidebarRef}>
+      <div className="relative art-deco-border" ref={sidebarRef}>
         <Sidebar
           collapsible="icon"
-          className="border-r-0"
+          className="border-r-0 bg-sidebar"
           disableTransition={isResizing}
         >
-          <SidebarHeader className="h-16 justify-center">
+          <SidebarHeader className="h-16 justify-center border-b border-gold-dim/20">
             <div className="flex items-center gap-3 px-2 transition-all w-full">
               <button
                 onClick={toggleSidebar}
-                className="h-8 w-8 flex items-center justify-center hover:bg-accent rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring shrink-0"
+                className="h-8 w-8 flex items-center justify-center hover:bg-gold/10 rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-gold"
                 aria-label="Toggle navigation"
               >
-                <PanelLeft className="h-4 w-4 text-muted-foreground" />
+                <PanelLeft className="h-4 w-4 text-gold" />
               </button>
               {!isCollapsed ? (
                 <div className="flex items-center gap-2 min-w-0">
-                  <span className="font-semibold tracking-tight truncate">
-                    Navigation
+                  <span className="font-display font-semibold tracking-tight truncate text-gold">
+                    VideoGator
                   </span>
                 </div>
               ) : null}
@@ -185,6 +185,11 @@ function DashboardLayoutContent({
           </SidebarHeader>
 
           <SidebarContent className="gap-0">
+            <div className="art-deco-divider mx-4 my-2">
+              <span className="font-display text-xs tracking-widest uppercase text-gold-dim px-2">
+                Menu
+              </span>
+            </div>
             <SidebarMenu className="px-2 py-1">
               {menuItems.map(item => {
                 const isActive = location === item.path;
@@ -194,7 +199,7 @@ function DashboardLayoutContent({
                       isActive={isActive}
                       onClick={() => setLocation(item.path)}
                       tooltip={item.label}
-                      className={`h-10 transition-all font-normal`}
+                      className={`h-10 transition-all font-normal ${isActive ? 'bg-gold/10 border-l-2 border-gold text-gold' : 'hover:bg-gold/5 hover:text-gold'}`}
                     >
                       <span className="text-lg">
                         {item.label === "Dashboard" && "📊"}
@@ -212,12 +217,12 @@ function DashboardLayoutContent({
             </SidebarMenu>
           </SidebarContent>
 
-          <SidebarFooter className="p-3">
+          <SidebarFooter className="p-3 border-t border-gold-dim/20">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-3 rounded-lg px-1 py-1 hover:bg-accent/50 transition-colors w-full text-left group-data-[collapsible=icon]:justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                  <Avatar className="h-9 w-9 border shrink-0">
-                    <AvatarFallback className="text-xs font-medium">
+                <button className="flex items-center gap-3 rounded-lg px-1 py-1 hover:bg-gold/10 transition-colors w-full text-left group-data-[collapsible=icon]:justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-gold">
+                  <Avatar className="h-9 w-9 border border-gold-dim shrink-0">
+                    <AvatarFallback className="text-xs font-medium bg-gold/10 text-gold">
                       {user?.name?.charAt(0).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
@@ -225,7 +230,7 @@ function DashboardLayoutContent({
                     <p className="text-sm font-medium truncate leading-none">
                       {user?.name || "-"}
                     </p>
-                    <p className="text-xs text-muted-foreground truncate mt-1.5">
+                    <p className="text-xs text-gold-dim truncate mt-1.5">
                       {user?.email || "-"}
                     </p>
                   </div>
@@ -244,7 +249,7 @@ function DashboardLayoutContent({
           </SidebarFooter>
         </Sidebar>
         <div
-          className={`absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-primary/20 transition-colors ${isCollapsed ? "hidden" : ""}`}
+          className={`absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-gold/30 transition-colors ${isCollapsed ? "hidden" : ""}`}
           onMouseDown={() => {
             if (isCollapsed) return;
             setIsResizing(true);
@@ -255,12 +260,12 @@ function DashboardLayoutContent({
 
       <SidebarInset>
         {isMobile && (
-          <div className="flex border-b h-14 items-center justify-between bg-background/95 px-2 backdrop-blur supports-[backdrop-filter]:backdrop-blur sticky top-0 z-40">
+          <div className="flex border-b border-gold-dim/20 h-14 items-center justify-between bg-card/95 px-2 backdrop-blur supports-[backdrop-filter]:backdrop-blur sticky top-0 z-40">
             <div className="flex items-center gap-2">
-              <SidebarTrigger className="h-9 w-9 rounded-lg bg-background" />
+              <SidebarTrigger className="h-9 w-9 rounded-lg bg-gold/10" />
               <div className="flex items-center gap-3">
                 <div className="flex flex-col gap-1">
-                  <span className="tracking-tight text-foreground">
+                  <span className="tracking-tight font-display text-gold">
                     {activeMenuItem?.label ?? "Menu"}
                   </span>
                 </div>
@@ -268,7 +273,7 @@ function DashboardLayoutContent({
             </div>
           </div>
         )}
-        <main className="flex-1 p-4">{children}</main>
+        <main className="flex-1 p-4 bg-background">{children}</main>
       </SidebarInset>
     </>
   );

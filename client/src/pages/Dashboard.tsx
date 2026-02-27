@@ -13,15 +13,15 @@ export default function Dashboard() {
 
   const stats = [
     {
-      label: "Total Projects",
-      value: projects?.length || 0,
-      icon: "📁",
-      color: "from-blue-500 to-blue-600",
+      label: "Video Models",
+      value: "8",
+      icon: "🎬",
+      color: "from-gold to-burgundy",
     },
     {
       label: "Available Services",
       value: services?.length || 0,
-      icon: "🎬",
+      icon: "🛠️",
       color: "from-purple-500 to-purple-600",
     },
     {
@@ -31,25 +31,25 @@ export default function Dashboard() {
       color: "from-emerald-500 to-emerald-600",
     },
     {
-      label: "API Integrations",
-      value: "0",
-      icon: "⚡",
+      label: "Your Projects",
+      value: projects?.length || 0,
+      icon: "📁",
       color: "from-orange-500 to-orange-600",
     },
   ];
 
   const quickActions = [
     {
-      title: "Create New Project",
-      description: "Start a new video generation project",
-      icon: "✨",
-      action: () => setLocation("/projects"),
-      color: "from-accent to-secondary",
+      title: "Generate Video",
+      description: "Create AI-generated videos using local GPU models",
+      icon: "🎬",
+      action: () => setLocation("/foundry"),
+      color: "from-gold to-burgundy",
     },
     {
       title: "Explore Services",
       description: "Browse all available AI video generators",
-      icon: "🎬",
+      icon: "🛠️",
       action: () => setLocation("/services"),
       color: "from-blue-500 to-blue-600",
     },
@@ -68,10 +68,10 @@ export default function Dashboard() {
     <div className="space-y-8">
       {/* Welcome Section */}
       <div className="space-y-2">
-        <h1 className="text-4xl font-bold">
-          Welcome back, <span className="gradient-text">{user?.name || "User"}</span>
+        <h1 className="text-4xl font-display font-bold">
+          Welcome back, <span className="gold-gradient-text">{user?.name || "User"}</span>
         </h1>
-        <p className="text-muted-foreground text-lg">
+        <p className="text-gold-dim text-lg">
           Your unified video generation orchestrator dashboard
         </p>
       </div>
@@ -79,10 +79,10 @@ export default function Dashboard() {
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((stat, idx) => (
-          <Card key={idx} className="p-6 hover-lift">
+          <Card key={idx} className="art-deco-card p-6 hover-lift">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">{stat.label}</p>
+                <p className="text-sm font-medium text-gold-dim">{stat.label}</p>
                 <p className="text-3xl font-bold mt-2">{stat.value}</p>
               </div>
               <span className="text-3xl">{stat.icon}</span>
@@ -93,12 +93,16 @@ export default function Dashboard() {
 
       {/* Quick Actions */}
       <div className="space-y-4">
-        <h2 className="text-2xl font-bold">Quick Actions</h2>
+        <div className="art-deco-divider">
+          <span className="font-display text-sm tracking-widest uppercase text-gold-dim px-2">
+            Quick Actions
+          </span>
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {quickActions.map((action, idx) => (
             <Card
               key={idx}
-              className="p-6 hover-lift cursor-pointer group overflow-hidden relative"
+              className="art-deco-card p-6 hover-lift cursor-pointer group overflow-hidden relative"
               onClick={action.action}
             >
               {/* Background gradient */}
@@ -109,17 +113,17 @@ export default function Dashboard() {
               <div className="relative space-y-3">
                 <span className="text-4xl block">{action.icon}</span>
                 <div>
-                  <h3 className="font-bold text-lg group-hover:text-accent transition-colors">
+                  <h3 className="font-display font-bold text-lg group-hover:text-gold transition-colors">
                     {action.title}
                   </h3>
-                  <p className="text-sm text-muted-foreground mt-1">
+                  <p className="text-sm text-gold-dim mt-1">
                     {action.description}
                   </p>
                 </div>
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="mt-4 text-accent hover:bg-accent/10 group-hover:translate-x-1 transition-transform"
+                  className="mt-4 text-gold hover:bg-gold/10 group-hover:translate-x-1 transition-transform"
                 >
                   Get Started →
                 </Button>
@@ -132,10 +136,15 @@ export default function Dashboard() {
       {/* Recent Projects */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-bold">Recent Projects</h2>
+          <div className="art-deco-divider flex-1">
+            <span className="font-display text-sm tracking-widest uppercase text-gold-dim px-2">
+              Recent Projects
+            </span>
+          </div>
           <Button
             variant="outline"
             size="sm"
+            className="border-gold-dim/40 text-gold hover:bg-gold/10"
             onClick={() => setLocation("/projects")}
           >
             View All
@@ -143,20 +152,20 @@ export default function Dashboard() {
         </div>
 
         {projectsLoading ? (
-          <Card className="p-8 flex items-center justify-center">
-            <Loader2 className="w-6 h-6 animate-spin text-accent" />
+          <Card className="art-deco-card p-8 flex items-center justify-center">
+            <Loader2 className="w-6 h-6 animate-spin text-gold" />
           </Card>
         ) : recentProjects.length > 0 ? (
           <div className="space-y-3">
             {recentProjects.map((project: any) => (
               <Card
                 key={project.id}
-                className="p-4 hover-lift cursor-pointer flex items-center justify-between"
+                className="art-deco-card p-4 hover-lift cursor-pointer flex items-center justify-between"
                 onClick={() => setLocation(`/projects/${project.id}`)}
               >
                 <div className="flex-1">
                   <h3 className="font-semibold">{project.name}</h3>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-gold-dim">
                     {project.description || "No description"}
                   </p>
                 </div>
@@ -170,16 +179,16 @@ export default function Dashboard() {
                   }`}>
                     {project.status}
                   </span>
-                  <span className="text-muted-foreground">→</span>
+                  <span className="text-gold">→</span>
                 </div>
               </Card>
             ))}
           </div>
         ) : (
-          <Card className="p-8 text-center">
-            <p className="text-muted-foreground">No projects yet</p>
+          <Card className="art-deco-card p-8 text-center">
+            <p className="text-gold-dim">No projects yet</p>
             <Button
-              className="mt-4 bg-accent text-accent-foreground hover:bg-accent/90"
+              className="mt-4 bg-gold text-background hover:bg-gold/90"
               onClick={() => setLocation("/projects")}
             >
               Create Your First Project
@@ -190,44 +199,48 @@ export default function Dashboard() {
 
       {/* Features Overview */}
       <div className="space-y-4">
-        <h2 className="text-2xl font-bold">Platform Features</h2>
+        <div className="art-deco-divider">
+          <span className="font-display text-sm tracking-widest uppercase text-gold-dim px-2">
+            Platform Features
+          </span>
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Card className="p-6 space-y-3">
+          <Card className="art-deco-card p-6 space-y-3">
             <div className="flex items-center gap-3">
-              <Sparkles className="w-6 h-6 text-accent" />
-              <h3 className="font-bold">AI Service Aggregation</h3>
+              <Sparkles className="w-6 h-6 text-gold" />
+              <h3 className="font-display font-bold">AI Service Aggregation</h3>
             </div>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-gold-dim">
               Access multiple AI video generation services from one unified dashboard. Compare capabilities and choose the best tool for your needs.
             </p>
           </Card>
 
-          <Card className="p-6 space-y-3">
+          <Card className="art-deco-card p-6 space-y-3">
             <div className="flex items-center gap-3">
-              <Zap className="w-6 h-6 text-secondary" />
-              <h3 className="font-bold">Project Management</h3>
+              <Zap className="w-6 h-6 text-gold" />
+              <h3 className="font-display font-bold">Project Management</h3>
             </div>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-gold-dim">
               Organize and manage all your video generation projects in one place. Track status, save settings, and access your entire generation history.
             </p>
           </Card>
 
-          <Card className="p-6 space-y-3">
+          <Card className="art-deco-card p-6 space-y-3">
             <div className="flex items-center gap-3">
-              <TrendingUp className="w-6 h-6 text-emerald-500" />
-              <h3 className="font-bold">Pharma Specialization</h3>
+              <TrendingUp className="w-6 h-6 text-gold" />
+              <h3 className="font-display font-bold">Pharma Specialization</h3>
             </div>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-gold-dim">
               Create stunning molecular animations and scientific visualizations with our specialized pharma module. Perfect for drug discovery and biotech companies.
             </p>
           </Card>
 
-          <Card className="p-6 space-y-3">
+          <Card className="art-deco-card p-6 space-y-3">
             <div className="flex items-center gap-3">
-              <Users className="w-6 h-6 text-blue-500" />
-              <h3 className="font-bold">Enterprise Ready</h3>
+              <Users className="w-6 h-6 text-gold" />
+              <h3 className="font-display font-bold">Enterprise Ready</h3>
             </div>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-gold-dim">
               Built for teams and enterprises. Secure authentication, role-based access, and scalable infrastructure for your organization.
             </p>
           </Card>

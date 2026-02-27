@@ -201,24 +201,24 @@ export default function VideoFoundry() {
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <div className="space-y-2">
-          <h1 className="text-4xl font-bold">Video Foundry</h1>
-          <p className="text-muted-foreground">
-            Generate videos with local GPU acceleration. Supports multiple AI models.
+          <h1 className="text-4xl font-display font-bold gold-gradient-text">Video Foundry</h1>
+          <p className="text-gold-dim">
+            Generate videos with local GPU acceleration. Select a model, write a prompt, and click <span className="text-gold font-semibold">Run Pipeline</span> to create your video.
           </p>
         </div>
         
         {/* Server Status */}
-        <Card className="p-3 flex items-center gap-3">
-          <Server className="w-5 h-5 text-muted-foreground" />
+        <Card className="art-deco-card p-3 flex items-center gap-3">
+          <Server className="w-5 h-5 text-gold" />
           <div className="text-sm">
             <div className="font-medium">Video Server</div>
             {serverHealthQuery.isLoading ? (
-              <div className="text-muted-foreground">Checking...</div>
+              <div className="text-gold-dim">Checking...</div>
             ) : serverAvailable ? (
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-green-500" />
                 <span>Online</span>
-                <Badge variant="secondary" className="text-xs">
+                <Badge variant="secondary" className="text-xs bg-gold/10 text-gold">
                   {serverDevice === "cuda" ? `${serverGpu}` : "CPU"}
                 </Badge>
               </div>
@@ -232,7 +232,23 @@ export default function VideoFoundry() {
         </Card>
       </div>
 
-      <Card className="p-6 space-y-4">
+      {/* How to Use */}
+      <Card className="art-deco-card p-4 bg-gold/5 border-gold/20">
+        <div className="flex items-start gap-3">
+          <div className="text-2xl">💡</div>
+          <div>
+            <h3 className="font-display font-semibold text-gold">How to Generate a Video</h3>
+            <ol className="text-sm text-gold-dim mt-2 space-y-1 list-decimal list-inside">
+              <li>Click <span className="text-gold font-medium">"Add Generate"</span> below to create a generation step</li>
+              <li>Select your AI model (HunyuanVideo, Wan, LTX-Video, etc.)</li>
+              <li>Write a descriptive prompt for your video</li>
+              <li>Click <span className="text-gold font-medium">"Run Pipeline"</span> to start generating</li>
+            </ol>
+          </div>
+        </div>
+      </Card>
+
+      <Card className="art-deco-card p-6 space-y-4">
         <div>
           <label htmlFor="input-video-url" className="text-sm font-medium">Input Video URL (optional for text-to-video)</label>
           <Input
@@ -246,11 +262,11 @@ export default function VideoFoundry() {
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={addTrim}>
+          <Button variant="outline" className="border-gold-dim/40 text-gold hover:bg-gold/10" onClick={addTrim}>
             <Plus className="w-4 h-4 mr-2" />
             Add Trim
           </Button>
-          <Button variant="outline" onClick={addGenerate}>
+          <Button className="bg-gold text-background hover:bg-gold/90" onClick={addGenerate}>
             <Plus className="w-4 h-4 mr-2" />
             Add Generate
           </Button>
@@ -258,7 +274,10 @@ export default function VideoFoundry() {
 
         <div className="space-y-3">
           {operations.length === 0 ? (
-            <div className="text-sm text-muted-foreground">No operations yet.</div>
+            <div className="text-center py-12 text-gold-dim border-2 border-dashed border-gold-dim/20 rounded-lg">
+              <p className="text-lg mb-2">No operations yet</p>
+              <p className="text-sm">Click <span className="text-gold font-medium">"Add Generate"</span> above to start creating your video</p>
+            </div>
           ) : (
             operations.map((op, index) => (
               <Card key={op.id} className="p-4 space-y-3">
