@@ -814,67 +814,67 @@ async def ollama_generate(request: dict):
                 jobs[job_id]["error_suggestion"] = estimate_suggestion_for_request(generate_request)
             except Exception:
                 pass
-        raise HTTPException(status_code=500, detail=str(e))
+    raise HTTPException(status_code=500, detail=str(e))
 
 
-    class EstimateRequest(BaseModel):
-        vram_gb: float = Field(..., description="Available GPU VRAM in GB")
-        model: Optional[VideoModel] = Field(default=VideoModel.HUNYUAN_VIDEO)
+class EstimateRequest(BaseModel):
+    vram_gb: float = Field(..., description="Available GPU VRAM in GB")
+    model: Optional[VideoModel] = Field(default=VideoModel.HUNYUAN_VIDEO)
 
 
-    class EstimateResponse(BaseModel):
-        model: str
-        vram_gb: float
-        recommended_max_frames: int
-        experimental_max_frames: int
-        base_vram_gb: float
-        per_frame_vram_gb: float
+class EstimateResponse(BaseModel):
+    model: str
+    vram_gb: float
+    recommended_max_frames: int
+    experimental_max_frames: int
+    base_vram_gb: float
+    per_frame_vram_gb: float
 
 
-    def estimate_for_model(vram_gb: float, model: VideoModel):
-        cfg = MODEL_CONFIGS[model]
-        available = max(0.0, vram_gb - cfg.base_vram_gb)
-        if cfg.per_frame_vram_gb <= 0:
-            conservative = 1
+def estimate_for_model(vram_gb: float, model: VideoModel):
+    cfg = MODEL_CONFIGS[model]
+    available = max(0.0, vram_gb - cfg.base_vram_gb)
+    if cfg.per_frame_vram_gb <= 0:
+        conservative = 1
+    else:
+        conservative = max(1, int(available // cfg.per_frame_vram_gb))
+
+    # Experimental assumes we can squeeze a bit of baseline
+    experimental_available = max(0.0, vram_gb - cfg.base_vram_gb * 0.8)
+    experimental = max(1, int(experimental_available // cfg.per_frame_vram_gb))
+
+    return {
+        "model": model.value,
+        "vram_gb": vram_gb,
+        "recommended_max_frames": conservative,
+        "experimental_max_frames": experimental,
+        "base_vram_gb": cfg.base_vram_gb,
+        "per_frame_vram_gb": cfg.per_frame_vram_gb,
+    }
+
+
+def estimate_suggestion_for_request(req: GenerateRequest):
+    try:
+        model = req.model
+    except Exception:
+        model = VideoModel.HUNYUAN_VIDEO
+    try:
+        import torch as _torch
+        if _torch.cuda.is_available():
+            vram = _torch.cuda.get_device_properties(0).total_memory / 1e9
         else:
-            conservative = max(1, int(available // cfg.per_frame_vram_gb))
-
-        # Experimental assumes we can squeeze a bit of baseline
-        experimental_available = max(0.0, vram_gb - cfg.base_vram_gb * 0.8)
-        experimental = max(1, int(experimental_available // cfg.per_frame_vram_gb))
-
-        return {
-            "model": model.value,
-            "vram_gb": vram_gb,
-            "recommended_max_frames": conservative,
-            "experimental_max_frames": experimental,
-            "base_vram_gb": cfg.base_vram_gb,
-            "per_frame_vram_gb": cfg.per_frame_vram_gb,
-        }
-
-
-    def estimate_suggestion_for_request(req: GenerateRequest):
-        try:
-            model = req.model
-        except Exception:
-            model = VideoModel.HUNYUAN_VIDEO
-        try:
-            import torch as _torch
-            if _torch.cuda.is_available():
-                vram = _torch.cuda.get_device_properties(0).total_memory / 1e9
-            else:
-                vram = 0.0
-        except Exception:
             vram = 0.0
+    except Exception:
+        vram = 0.0
 
-        return estimate_for_model(vram, model)
+    return estimate_for_model(vram, model)
 
 
-    @app.post("/estimate", response_model=EstimateResponse)
-    async def estimate(request: EstimateRequest):
-        """Estimate recommended frames given available VRAM and model."""
-        model = request.model or VideoModel.HUNYUAN_VIDEO
-        return estimate_for_model(request.vram_gb, model)
+@app.post("/estimate", response_model=EstimateResponse)
+async def estimate(request: EstimateRequest):
+    """Estimate recommended frames given available VRAM and model."""
+    model = request.model or VideoModel.HUNYUAN_VIDEO
+    return estimate_for_model(request.vram_gb, model)
 
 
 class EnhancePromptRequest(BaseModel):

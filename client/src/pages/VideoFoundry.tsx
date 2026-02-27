@@ -7,12 +7,39 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Plus, Play, Trash2, Settings2, Server, CheckCircle2, XCircle } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Loader2, Plus, Play, Trash2, Settings2, Server, CheckCircle2, XCircle, Info, Eye, Film, Lightbulb, Camera, Aperture, Clapperboard } from "lucide-react";
 import { useMemo, useState } from "react";
 import GeneratingAnimation from "@/components/GeneratingAnimation";
 import PromptBuilder from "@/components/PromptBuilder";
+import GatorMascot from "@/components/GatorMascot";
 
 type VideoModel = "hunyuan-video" | "mochi" | "cogvideo" | "modelscope" | "stable-video-diffusion" | "wan-2.2" | "wan-2.2-5b" | "ltx-2";
+
+// Video Gator's technical reference data
+const GATOR_LENSES = [
+  { value: "14mm", label: "14mm Wide", desc: "Barrel distortion, everything close", icon: "🔭" },
+  { value: "35mm", label: "35mm Standard", desc: "Natural perspective, slight wideness", icon: "📷" },
+  { value: "50mm", label: "50mm Normal", desc: "Human eye equivalent, no distortion", icon: "👁️" },
+  { value: "85mm", label: "85mm Portrait", desc: "Flattering compression, creamy bokeh", icon: "🎭" },
+  { value: "135mm", label: "135mm Telephoto", desc: "Heavy compression, isolated subject", icon: "🔍" },
+];
+
+const GATOR_LIGHTING = [
+  { value: "low-key", label: "Low Key", desc: "High contrast, dramatic shadows", ratio: "8:1", icon: "🌑" },
+  { value: "high-key", label: "High Key", desc: "Bright, even lighting, cheerful", ratio: "2:1", icon: "☀️" },
+  { value: "chiaroscuro", label: "Chiaroscuro", desc: "Bold contrast, single light source", ratio: "10:1", icon: "🎬" },
+  { value: "rembrandt", label: "Rembrandt", desc: "Triangle cheek shadow, classic", ratio: "4:1", icon: "🎨" },
+];
+
+const GATOR_MOVEMENT = [
+  { value: "static", label: "Static", desc: "No camera movement", icon: "⏸️" },
+  { value: "dolly-in", label: "Dolly Push-In", desc: "Moving closer, building tension", icon: "➡️" },
+  { value: "dolly-out", label: "Dolly Pull-Out", desc: "Moving away, revealing context", icon: "⬅️" },
+  { value: "pan", label: "Pan", desc: "Horizontal sweep", icon: "↔️" },
+  { value: "tilt", label: "Tilt", desc: "Vertical sweep", icon: "↕️" },
+  { value: "tracking", label: "Tracking Shot", desc: "Following subject movement", icon: "🎯" },
+];
 
 type Operation =
   | { id: string; type: "edit"; action: "trim"; params: { start: number; end: number } }
@@ -60,6 +87,13 @@ export default function VideoFoundry() {
   const [inputUrl, setInputUrl] = useState("");
   const [jobId, setJobId] = useState<string | null>(null);
   const [operations, setOperations] = useState<Operation[]>([]);
+  
+  // Video Gator's current setup (for visual reference)
+  const [gatorLens, setGatorLens] = useState("85mm");
+  const [gatorLighting, setGatorLighting] = useState("low-key");
+  const [gatorMovement, setGatorMovement] = useState("static");
+  const [gatorDof, setGatorDof] = useState(1.4);
+  const [showGatorPanel, setShowGatorPanel] = useState(true);
 
   const createJobMutation = trpc.video.create.useMutation();
   const generateMutation = trpc.video.generate.useMutation();
@@ -230,6 +264,190 @@ export default function VideoFoundry() {
             )}
           </div>
         </Card>
+      </div>
+
+      {/* Video Gator Studio Reference */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Gator Preview Canvas */}
+        <div className="lg:col-span-2">
+          <Card className="art-deco-card p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Clapperboard className="w-5 h-5 text-gold" />
+                <h3 className="font-display font-semibold">Video Gator's Studio</h3>
+              </div>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setShowGatorPanel(!showGatorPanel)}
+                className="text-gold-dim"
+              >
+                {showGatorPanel ? "Hide" : "Show"} Gator Panel
+              </Button>
+            </div>
+            
+            {/* Gator Visualization */}
+            <div className="relative aspect-video bg-gradient-to-br from-burgundy/30 via-background to-burgundy/20 rounded-lg overflow-hidden border border-gold-dim/20">
+              {/* Art Deco Sunburst Background */}
+              <div className="absolute inset-0 opacity-20">
+                <svg viewBox="0 0 400 300" className="w-full h-full">
+                  <defs>
+                    <radialGradient id="sunburst" cx="50%" cy="50%" r="50%">
+                      <stop offset="0%" stopColor="var(--gold)" />
+                      <stop offset="100%" stopColor="transparent" />
+                    </radialGradient>
+                  </defs>
+                  <circle cx="200" cy="150" r="180" fill="url(#sunburst)" />
+                  {[...Array(12)].map((_, i) => (
+                    <line 
+                      key={i} 
+                      x1="200" y1="150" 
+                      x2={200 + 200 * Math.cos(i * 30 * Math.PI / 180)} 
+                      y2={150 + 200 * Math.sin(i * 30 * Math.PI / 180)} 
+                      stroke="var(--gold-dim)" 
+                      strokeWidth="1" 
+                      opacity="0.3"
+                    />
+                  ))}
+                </svg>
+              </div>
+              
+              {/* Video Gator Mascot */}
+              <div className="absolute inset-0 flex items-center justify-center">
+                <GatorMascot size="lg" variant="framed" />
+              </div>
+              
+              {/* Technical Overlay */}
+              <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between">
+                <div className="flex gap-2">
+                  <Badge className="bg-burgundy/80 text-foreground border-gold-dim/30">
+                    📐 {gatorLens}
+                  </Badge>
+                  <Badge className="bg-burgundy/80 text-foreground border-gold-dim/30">
+                    💡 {gatorLighting}
+                  </Badge>
+                  <Badge className="bg-burgundy/80 text-foreground border-gold-dim/30">
+                    🎬 {gatorMovement}
+                  </Badge>
+                </div>
+                <Badge className="bg-gold/20 text-gold border-gold">
+                  f/{gatorDof}
+                </Badge>
+              </div>
+            </div>
+            
+            {/* Gator's Current Reading */}
+            <div className="mt-4 p-4 bg-gold/5 border border-gold-dim/20 rounded-lg">
+              <div className="flex items-start gap-3">
+                <Eye className="w-5 h-5 text-gold mt-0.5" />
+                <div>
+                  <h4 className="font-display text-sm font-semibold text-gold">Gator's Technical Reading</h4>
+                  <p className="text-sm text-gold-dim mt-1">
+                    At {gatorLens}, Video Gator appears {gatorLens === "14mm" ? "comically close with distorted snout" : gatorLens === "85mm" ? "perfectly proportioned with creamy background blur" : "with natural perspective"}. 
+                    The {gatorLighting} lighting creates {gatorLighting === "low-key" ? "dramatic shadows—moral ambiguity" : gatorLighting === "high-key" ? "bright, even coverage—optimistic tone" : "bold contrast pattern"}. 
+                    {gatorMovement === "static" ? "Static frame creates tension through stillness." : gatorMovement === "dolly-in" ? "Dolly push builds suspense—forced perspective." : "Camera movement reveals " + gatorMovement + "."}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </Card>
+        </div>
+        
+        {/* Technical Control Panel */}
+        <div className="space-y-4">
+          {/* Lens Selection */}
+          <Card className="art-deco-card p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Camera className="w-4 h-4 text-gold" />
+              <h4 className="font-display text-sm font-semibold">Lens (Focal Length)</h4>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {GATOR_LENSES.map((lens) => (
+                <button
+                  key={lens.value}
+                  onClick={() => setGatorLens(lens.value)}
+                  className={`p-2 rounded-lg border text-left transition-all ${
+                    gatorLens === lens.value 
+                      ? "border-gold bg-gold/10 text-gold" 
+                      : "border-gold-dim/20 text-gold-dim hover:border-gold-dim/50"
+                  }`}
+                >
+                  <div className="text-xs font-medium">{lens.value}</div>
+                  <div className="text-xs opacity-70">{lens.desc}</div>
+                </button>
+              ))}
+            </div>
+          </Card>
+          
+          {/* Lighting Selection */}
+          <Card className="art-deco-card p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Lightbulb className="w-4 h-4 text-gold" />
+              <h4 className="font-display text-sm font-semibold">Lighting Style</h4>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {GATOR_LIGHTING.map((light) => (
+                <button
+                  key={light.value}
+                  onClick={() => setGatorLighting(light.value)}
+                  className={`p-2 rounded-lg border text-left transition-all ${
+                    gatorLighting === light.value 
+                      ? "border-gold bg-gold/10 text-gold" 
+                      : "border-gold-dim/20 text-gold-dim hover:border-gold-dim/50"
+                  }`}
+                >
+                  <div className="text-xs font-medium">{light.icon} {light.value}</div>
+                  <div className="text-xs opacity-70">{light.desc}</div>
+                </button>
+              ))}
+            </div>
+          </Card>
+          
+          {/* Movement Selection */}
+          <Card className="art-deco-card p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Film className="w-4 h-4 text-gold" />
+              <h4 className="font-display text-sm font-semibold">Camera Movement</h4>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {GATOR_MOVEMENT.map((move) => (
+                <button
+                  key={move.value}
+                  onClick={() => setGatorMovement(move.value)}
+                  className={`p-2 rounded-lg border text-center transition-all ${
+                    gatorMovement === move.value 
+                      ? "border-gold bg-gold/10 text-gold" 
+                      : "border-gold-dim/20 text-gold-dim hover:border-gold-dim/50"
+                  }`}
+                >
+                  <div className="text-lg mb-1">{move.icon}</div>
+                  <div className="text-xs">{move.label}</div>
+                </button>
+              ))}
+            </div>
+          </Card>
+          
+          {/* Depth of Field */}
+          <Card className="art-deco-card p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Aperture className="w-4 h-4 text-gold" />
+              <h4 className="font-display text-sm font-semibold">Aperture (f-stop)</h4>
+            </div>
+            <Slider
+              value={[gatorDof]}
+              onValueChange={([value]) => setGatorDof(value)}
+              min={1.4}
+              max={16}
+              step={0.1}
+              className="mb-2"
+            />
+            <div className="flex justify-between text-xs text-gold-dim">
+              <span>f/1.4 (Shallow)</span>
+              <span className="text-gold font-medium">f/{gatorDof.toFixed(1)}</span>
+              <span>f/16 (Deep)</span>
+            </div>
+          </Card>
+        </div>
       </div>
 
       {/* How to Use */}
