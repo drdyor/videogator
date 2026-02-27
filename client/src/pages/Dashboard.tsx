@@ -3,6 +3,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useLocation } from "wouter";
+import { useEffect, useState } from "react";
 import { Loader2, Sparkles, Zap, TrendingUp, Users } from "lucide-react";
 
 export default function Dashboard() {
@@ -63,6 +64,36 @@ export default function Dashboard() {
   ];
 
   const recentProjects = projects?.slice(0, 5) || [];
+
+  const [gpuType, setGpuType] = useState("");
+  const [vramGb, setVramGb] = useState<number>(16);
+  const [estimate, setEstimate] = useState<any>(null);
+  const [frames, setFrames] = useState<number>(16);
+
+  async function fetchEstimate() {
+    try {
+      const res = await fetch("http://localhost:8001/estimate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ vram_gb: vramGb, model: "hunyuan-video" }),
+      });
+      if (!res.ok) {
+        console.error("Estimate request failed", await res.text());
+        return;
+      }
+      const data = await res.json();
+      setEstimate(data);
+      setFrames((f) => Math.min(data.recommended_max_frames || data.experimental_max_frames || 16, f));
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  useEffect(() => {
+    // fetch a default estimate on mount
+    fetchEstimate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="space-y-8">
@@ -199,6 +230,55 @@ export default function Dashboard() {
 
       {/* Features Overview */}
       <div className="space-y-4">
+        {/* GPU / VRAM Estimator */}
+        <div className="art-deco-divider">
+          <span className="font-display text-sm tracking-widest uppercase text-gold-dim px-2">
+            GPU Profile & Frames Estimator
+          </span>
+        </div>
+        <Card className="art-deco-card p-6 space-y-3">
+          <div className="flex items-center gap-3">
+            <h3 className="font-display font-bold">Estimate Max Frames</h3>
+          </div>
+          <p className="text-sm text-gold-dim">Enter your GPU VRAM to get a recommended maximum frame count for generation.</p>
+
+          <div className="flex gap-3 mt-3 items-center">
+            <input
+              className="border rounded px-2 py-1 w-48 bg-background"
+              placeholder="GPU type (optional)"
+              value={gpuType}
+              onChange={(e) => setGpuType(e.target.value)}
+            />
+            <input
+              type="number"
+              className="border rounded px-2 py-1 w-28 bg-background"
+              value={vramGb}
+              onChange={(e) => setVramGb(Number(e.target.value))}
+              min={1}
+              step={1}
+            />
+            <Button onClick={() => fetchEstimate()} size="sm">Estimate</Button>
+          </div>
+
+          {estimate && (
+            <div className="mt-3 space-y-2">
+              <p className="text-sm">Recommended max frames: <strong className="text-gold">{estimate.recommended_max_frames}</strong></p>
+              <p className="text-sm">Experimental max frames: <strong className="text-gold">{estimate.experimental_max_frames}</strong></p>
+
+              <div className="flex items-center gap-3">
+                <input
+                  type="range"
+                  min={1}
+                  max={Math.max(estimate.recommended_max_frames, 1)}
+                  value={frames}
+                  onChange={(e) => setFrames(Number(e.target.value))}
+                  className="w-full"
+                />
+                <div className="text-sm">{frames} frames</div>
+              </div>
+            </div>
+          )}
+        </Card>
         <div className="art-deco-divider">
           <span className="font-display text-sm tracking-widest uppercase text-gold-dim px-2">
             Platform Features

@@ -507,11 +507,16 @@ export default function VideoFoundry() {
         </div>
 
         <div className="flex items-center gap-3">
-          <Button onClick={handleRun} disabled={!canRun || createJobMutation.isPending}>
+          <Button 
+            onClick={handleRun} 
+            disabled={!canRun || createJobMutation.isPending}
+            className="bg-gold text-background hover:bg-gold/90 px-8"
+            size="lg"
+          >
             {createJobMutation.isPending ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Queuing...
+                Generating...
               </>
             ) : (
               <>
@@ -520,8 +525,13 @@ export default function VideoFoundry() {
               </>
             )}
           </Button>
+          {!canRun && (
+            <span className="text-sm text-gold-dim">
+              Add a Generate step to enable video creation
+            </span>
+          )}
           {jobId && (
-            <span className="text-sm text-muted-foreground">Job: {jobId}</span>
+            <span className="text-sm text-gold-dim">Job: {jobId}</span>
           )}
         </div>
       </Card>

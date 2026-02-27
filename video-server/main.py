@@ -92,6 +92,9 @@ class ModelConfig:
     default_height: int
     default_frames: int
     supports_image_to_video: bool
+    # Heuristics for VRAM estimation (GB)
+    base_vram_gb: float = 6.0
+    per_frame_vram_gb: float = 0.03
 
 
 MODEL_CONFIGS = {
@@ -102,6 +105,8 @@ MODEL_CONFIGS = {
         default_height=480,
         default_frames=65,
         supports_image_to_video=False,
+        base_vram_gb=12.0,
+        per_frame_vram_gb=0.08,
     ),
     VideoModel.MOCHI: ModelConfig(
         name="Mochi",
@@ -110,6 +115,8 @@ MODEL_CONFIGS = {
         default_height=480,
         default_frames=65,
         supports_image_to_video=False,
+        base_vram_gb=12.0,
+        per_frame_vram_gb=0.08,
     ),
     VideoModel.COGVIDEO: ModelConfig(
         name="CogVideoX",
@@ -118,6 +125,8 @@ MODEL_CONFIGS = {
         default_height=480,
         default_frames=49,
         supports_image_to_video=True,
+        base_vram_gb=8.0,
+        per_frame_vram_gb=0.06,
     ),
     VideoModel.MODELSCOPE: ModelConfig(
         name="ModelScope",
@@ -126,6 +135,8 @@ MODEL_CONFIGS = {
         default_height=256,
         default_frames=16,
         supports_image_to_video=False,
+        base_vram_gb=4.0,
+        per_frame_vram_gb=0.02,
     ),
     VideoModel.ANIMATEDIFF: ModelConfig(
         name="AnimateDiff",
@@ -134,6 +145,8 @@ MODEL_CONFIGS = {
         default_height=512,
         default_frames=16,
         supports_image_to_video=False,
+        base_vram_gb=6.0,
+        per_frame_vram_gb=0.03,
     ),
     VideoModel.SVS: ModelConfig(
         name="Stable Video Diffusion",
@@ -142,6 +155,8 @@ MODEL_CONFIGS = {
         default_height=576,
         default_frames=25,
         supports_image_to_video=True,
+        base_vram_gb=6.0,
+        per_frame_vram_gb=0.03,
     ),
     VideoModel.WAN_22: ModelConfig(
         name="Wan 2.2 (14B)",
@@ -150,6 +165,8 @@ MODEL_CONFIGS = {
         default_height=480,
         default_frames=81,
         supports_image_to_video=False,
+        base_vram_gb=14.0,
+        per_frame_vram_gb=0.12,
     ),
     VideoModel.WAN_22_5B: ModelConfig(
         name="Wan 2.2 (5B)",
@@ -158,6 +175,8 @@ MODEL_CONFIGS = {
         default_height=480,
         default_frames=81,
         supports_image_to_video=True,
+        base_vram_gb=14.0,
+        per_frame_vram_gb=0.12,
     ),
     VideoModel.LTX_2: ModelConfig(
         name="LTX-Video",
@@ -166,6 +185,8 @@ MODEL_CONFIGS = {
         default_height=512,
         default_frames=97,
         supports_image_to_video=False,
+        base_vram_gb=10.0,
+        per_frame_vram_gb=0.05,
     ),
 }
 
@@ -622,6 +643,13 @@ async def generate_video_task(job_id: str, request: GenerateRequest):
         logger.error(f"Job {job_id} failed: {e}")
         jobs[job_id]["status"] = "failed"
         jobs[job_id]["error"] = str(e)
+        # If OOM, provide a suggested reduction based on detected GPU VRAM
+        if "out of memory" in str(e).lower() or "cuda error" in str(e).lower():
+            try:
+                suggestion = estimate_suggestion_for_request(request)
+                jobs[job_id]["error_suggestion"] = suggestion
+            except Exception:
+                pass
 
 
 @app.get("/")
@@ -707,6 +735,8 @@ async def list_models():
             "default_height": config.default_height,
             "default_frames": config.default_frames,
             "supports_image_to_video": config.supports_image_to_video,
+            "base_vram_gb": config.base_vram_gb,
+            "per_frame_vram_gb": config.per_frame_vram_gb,
         }
         for model, config in MODEL_CONFIGS.items()
     }
@@ -778,7 +808,73 @@ async def ollama_generate(request: dict):
     except Exception as e:
         jobs[job_id]["status"] = "failed"
         jobs[job_id]["error"] = str(e)
+        # Attach suggestion when OOM-like errors occur
+        if "out of memory" in str(e).lower() or "cuda error" in str(e).lower():
+            try:
+                jobs[job_id]["error_suggestion"] = estimate_suggestion_for_request(generate_request)
+            except Exception:
+                pass
         raise HTTPException(status_code=500, detail=str(e))
+
+
+    class EstimateRequest(BaseModel):
+        vram_gb: float = Field(..., description="Available GPU VRAM in GB")
+        model: Optional[VideoModel] = Field(default=VideoModel.HUNYUAN_VIDEO)
+
+
+    class EstimateResponse(BaseModel):
+        model: str
+        vram_gb: float
+        recommended_max_frames: int
+        experimental_max_frames: int
+        base_vram_gb: float
+        per_frame_vram_gb: float
+
+
+    def estimate_for_model(vram_gb: float, model: VideoModel):
+        cfg = MODEL_CONFIGS[model]
+        available = max(0.0, vram_gb - cfg.base_vram_gb)
+        if cfg.per_frame_vram_gb <= 0:
+            conservative = 1
+        else:
+            conservative = max(1, int(available // cfg.per_frame_vram_gb))
+
+        # Experimental assumes we can squeeze a bit of baseline
+        experimental_available = max(0.0, vram_gb - cfg.base_vram_gb * 0.8)
+        experimental = max(1, int(experimental_available // cfg.per_frame_vram_gb))
+
+        return {
+            "model": model.value,
+            "vram_gb": vram_gb,
+            "recommended_max_frames": conservative,
+            "experimental_max_frames": experimental,
+            "base_vram_gb": cfg.base_vram_gb,
+            "per_frame_vram_gb": cfg.per_frame_vram_gb,
+        }
+
+
+    def estimate_suggestion_for_request(req: GenerateRequest):
+        try:
+            model = req.model
+        except Exception:
+            model = VideoModel.HUNYUAN_VIDEO
+        try:
+            import torch as _torch
+            if _torch.cuda.is_available():
+                vram = _torch.cuda.get_device_properties(0).total_memory / 1e9
+            else:
+                vram = 0.0
+        except Exception:
+            vram = 0.0
+
+        return estimate_for_model(vram, model)
+
+
+    @app.post("/estimate", response_model=EstimateResponse)
+    async def estimate(request: EstimateRequest):
+        """Estimate recommended frames given available VRAM and model."""
+        model = request.model or VideoModel.HUNYUAN_VIDEO
+        return estimate_for_model(request.vram_gb, model)
 
 
 class EnhancePromptRequest(BaseModel):
