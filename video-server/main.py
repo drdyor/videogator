@@ -629,6 +629,7 @@ async def generate_video_task(job_id: str, request: GenerateRequest):
         
         # Run generation in thread pool
         loop = asyncio.get_event_loop()
+        # Primary generation attempt
         video_path = await loop.run_in_executor(
             None,
             lambda: generator.generate(request, output_path)
@@ -642,15 +643,75 @@ async def generate_video_task(job_id: str, request: GenerateRequest):
         
     except Exception as e:
         logger.error(f"Job {job_id} failed: {e}")
-        jobs[job_id]["status"] = "failed"
-        jobs[job_id]["error"] = str(e)
-        # If OOM, provide a suggested reduction based on detected GPU VRAM
-        if "out of memory" in str(e).lower() or "cuda error" in str(e).lower():
+        # If OOM/CUDA error, try a single automatic fallback (reduced frames / resolution)
+        err_str = str(e).lower()
+        if "out of memory" in err_str or "cuda error" in err_str or "oom" in err_str:
             try:
                 suggestion = estimate_suggestion_for_request(request)
-                jobs[job_id]["error_suggestion"] = suggestion
             except Exception:
-                pass
+                suggestion = None
+
+            # Record suggestion for UI
+            if suggestion:
+                jobs[job_id]["error_suggestion"] = suggestion
+
+            # Only attempt one automatic retry to avoid long loops
+            try:
+                # Derive fallback parameters
+                if suggestion and isinstance(suggestion, dict):
+                    fallback_frames = suggestion.get("recommended_frames") or suggestion.get("safe_frames") or suggestion.get("max_frames_safe")
+                else:
+                    fallback_frames = None
+
+                # Fallback strategy: prefer suggested frames; otherwise halve frames and reduce resolution by 25%
+                if not fallback_frames:
+                    fallback_frames = max(9, request.num_frames // 2)
+
+                # Reduce resolution moderately
+                new_width = max(256, int(request.width * 0.75))
+                new_height = max(256, int(request.height * 0.75))
+
+                # If fallback would not change anything, skip
+                if fallback_frames >= request.num_frames and new_width >= request.width and new_height >= request.height:
+                    raise e
+
+                logger.info(f"Attempting OOM fallback for job {job_id}: frames={fallback_frames}, {new_width}x{new_height}")
+
+                # Build a new GenerateRequest for retry
+                retry_payload = request.dict()
+                retry_payload["num_frames"] = int(fallback_frames)
+                retry_payload["width"] = int(new_width)
+                retry_payload["height"] = int(new_height)
+                retry_request = GenerateRequest(**retry_payload)
+
+                # Run retry in executor
+                video_path = await loop.run_in_executor(
+                    None,
+                    lambda: generator.generate(retry_request, output_path)
+                )
+
+                # If retry succeeds, mark completed and attach suggestion explaining retry
+                jobs[job_id]["status"] = "completed"
+                jobs[job_id]["progress"] = 1.0
+                jobs[job_id]["output_url"] = f"/output/{video_path.name}"
+                jobs[job_id]["error_suggestion"] = jobs[job_id].get("error_suggestion") or {"note": "Automatically retried with reduced frames/resolution"}
+                logger.info(f"Job {job_id} completed after OOM fallback: {video_path}")
+                return
+            except Exception as e2:
+                logger.error(f"OOM fallback for job {job_id} also failed: {e2}")
+                jobs[job_id]["status"] = "failed"
+                jobs[job_id]["error"] = f"{e} | fallback error: {e2}"
+                # Keep any suggestion set above
+                return
+
+        # Non-OOM or fallback path: record failure
+        jobs[job_id]["status"] = "failed"
+        jobs[job_id]["error"] = str(e)
+        try:
+            suggestion = estimate_suggestion_for_request(request)
+            jobs[job_id]["error_suggestion"] = suggestion
+        except Exception:
+            pass
 
 
 @app.get("/")
