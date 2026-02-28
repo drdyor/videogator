@@ -15,7 +15,7 @@ import PromptBuilder from "@/components/PromptBuilder";
 import GatorMascot from "@/components/GatorMascot";
 import { Textarea } from "@/components/ui/textarea";
 
-type VideoModel = "hunyuan-video" | "mochi" | "cogvideo" | "modelscope" | "stable-video-diffusion" | "wan-2.2" | "wan-2.2-5b" | "ltx-2" | "humo" | "kling-2.5" | "luma-ray-flash-2" | "minimax-video-01";
+type VideoModel = "hunyuan-video" | "mochi" | "cogvideo" | "modelscope" | "stable-video-diffusion" | "wan-2.2" | "wan-2.2-5b" | "ltx-2";
 
 // Job status from video server
 interface JobStatus {
@@ -102,9 +102,7 @@ export default function VideoFoundry() {
   // Story Mode state
   const [storyMode, setStoryMode] = useState(false);
   const [storyInput, setStoryInput] = useState("");
-  const [storyModel, setStoryModel] = useState<VideoModel>("wan-2.2");
-  const [storyReferenceImageUrl, setStoryReferenceImageUrl] = useState("");
-  const [storyAudioUrl, setStoryAudioUrl] = useState("");
+  const [storyModel, setStoryModel] = useState<VideoModel>("modelscope");
   const [scenes, setScenes] = useState<string[]>([]);
   const [generatedClips, setGeneratedClips] = useState<{scene: string; url: string; jobId: string}[]>([]);
   const [isGeneratingStory, setIsGeneratingStory] = useState(false);
@@ -257,22 +255,18 @@ export default function VideoFoundry() {
     setStoryError(null);
     setCurrentSceneIndex(0);
     
-    // Per-model param defaults
-    const cloudModels: VideoModel[] = ["humo", "kling-2.5", "luma-ray-flash-2", "minimax-video-01"];
-    const isCloud = cloudModels.includes(storyModel);
-    const baseParams = isCloud
-      ? { width: 1280, height: 720, numFrames: 49, numInferenceSteps: 50, guidanceScale: 5.0, fps: 25 }
-      : { width: 832, height: 480, numFrames: 81, numInferenceSteps: 30, guidanceScale: 7.0, fps: 8 };
-
     // Generate first scene
     try {
       const result = await generateMutation.mutateAsync({
         prompt: parsedScenes[0],
         negativePrompt: "",
         model: storyModel,
-        ...baseParams,
-        ...(isCloud && storyReferenceImageUrl ? { imageUrl: storyReferenceImageUrl } : {}),
-        ...(storyModel === "humo" && storyAudioUrl ? { audioUrl: storyAudioUrl } : {}),
+        width: 832,
+        height: 480,
+        numFrames: 81,
+        numInferenceSteps: 30,
+        guidanceScale: 7.0,
+        fps: 8,
       });
       setJobId(result.jobId);
     } catch (error) {
@@ -389,18 +383,16 @@ export default function VideoFoundry() {
         const nextIndex = currentSceneIndex + 1;
         setCurrentSceneIndex(nextIndex);
 
-        const isCloud = (["humo", "kling-2.5", "luma-ray-flash-2", "minimax-video-01"] as VideoModel[]).includes(storyModel);
-        const nextParams = isCloud
-          ? { width: 1280, height: 720, numFrames: 49, numInferenceSteps: 50, guidanceScale: 5.0, fps: 25 }
-          : { width: 832, height: 480, numFrames: 81, numInferenceSteps: 30, guidanceScale: 7.0, fps: 8 };
-
         generateMutationRef.current.mutate({
           prompt: scenes[nextIndex],
           negativePrompt: "",
           model: storyModel,
-          ...nextParams,
-          ...(isCloud && storyReferenceImageUrl ? { imageUrl: storyReferenceImageUrl } : {}),
-          ...(storyModel === "humo" && storyAudioUrl ? { audioUrl: storyAudioUrl } : {}),
+          width: 832,
+          height: 480,
+          numFrames: 81,
+          numInferenceSteps: 30,
+          guidanceScale: 7.0,
+          fps: 8,
         });
       } else {
         // All scenes generated - ready for stitching
@@ -758,51 +750,16 @@ export default function VideoFoundry() {
                   <SelectValue placeholder="Select model" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="wan-2.2">Wan 2.2 (Fast, 8GB local)</SelectItem>
-                  <SelectItem value="wan-2.2-5b">Wan 2.2 5B (Better quality, 14GB local)</SelectItem>
-                  <SelectItem value="hunyuan-video">Hunyuan Video (Great quality, 12GB local)</SelectItem>
-                  <SelectItem value="mochi">Mochi (Anime style, 8GB local)</SelectItem>
-                  <SelectItem value="ltx-2">LTX 2 (Latest, 8GB local)</SelectItem>
-                  <SelectItem value="humo">HuMo — ByteDance ☁ (Human-centric, lip-sync)</SelectItem>
-                  <SelectItem value="kling-2.5">Kling 2.5 Turbo ☁ (Cinematic, fast)</SelectItem>
-                  <SelectItem value="luma-ray-flash-2">Luma Ray Flash 2 ☁ (Camera control)</SelectItem>
-                  <SelectItem value="minimax-video-01">MiniMax Video 01 ☁ (Strong motion)</SelectItem>
+                  <SelectItem value="modelscope">ModelScope (Fastest, 3GB, 256×256)</SelectItem>
+                  <SelectItem value="ltx-2">LTX-Video (Good quality, 10GB, 768×512)</SelectItem>
+                  <SelectItem value="wan-2.2-5b">Wan 2.2 5B (Great quality, 10GB, 832×480)</SelectItem>
+                  <SelectItem value="wan-2.2">Wan 2.2 14B (Best quality, 28GB, 832×480)</SelectItem>
+                  <SelectItem value="cogvideo">CogVideoX-5b (20GB, 720×480)</SelectItem>
+                  <SelectItem value="hunyuan-video">HunyuanVideo (25GB, 848×480)</SelectItem>
+                  <SelectItem value="mochi">Mochi (Anime style, 12GB, 848×480)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-
-            {/* Cloud model inputs (HuMo / Kling / Luma / MiniMax) */}
-            {(["humo", "kling-2.5", "luma-ray-flash-2", "minimax-video-01"] as VideoModel[]).includes(storyModel) && (
-              <div className="space-y-3 p-3 bg-gold/5 border border-gold/20 rounded-lg">
-                <p className="text-xs text-gold font-medium">
-                  ☁ Runs on Replicate cloud — requires <code className="bg-gold/10 px-1 rounded">REPLICATE_API_TOKEN</code> in your .env
-                </p>
-                <div>
-                  <Label className="text-xs text-muted-foreground">
-                    Reference / Start Frame Image URL{storyModel === "humo" ? " (locks character appearance)" : " (optional)"}
-                  </Label>
-                  <Input
-                    placeholder="https://example.com/image.jpg"
-                    value={storyReferenceImageUrl}
-                    onChange={(e) => setStoryReferenceImageUrl(e.target.value)}
-                    className="mt-1"
-                    disabled={isGeneratingStory}
-                  />
-                </div>
-                {storyModel === "humo" && (
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Audio URL (optional — enables lip-sync, MP3/WAV)</Label>
-                    <Input
-                      placeholder="https://example.com/audio.mp3"
-                      value={storyAudioUrl}
-                      onChange={(e) => setStoryAudioUrl(e.target.value)}
-                      className="mt-1"
-                      disabled={isGeneratingStory}
-                    />
-                  </div>
-                )}
-              </div>
-            )}
 
             {storyError && (
               <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">
