@@ -9,13 +9,23 @@ import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, Plus, Play, Trash2, Settings2, Server, CheckCircle2, XCircle, Info, Eye, Film, Lightbulb, Camera, Aperture, Clapperboard } from "lucide-react";
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import GeneratingAnimation from "@/components/GeneratingAnimation";
 import PromptBuilder from "@/components/PromptBuilder";
 import GatorMascot from "@/components/GatorMascot";
 import { Textarea } from "@/components/ui/textarea";
 
 type VideoModel = "hunyuan-video" | "mochi" | "cogvideo" | "modelscope" | "stable-video-diffusion" | "wan-2.2" | "wan-2.2-5b" | "ltx-2";
+
+// Job status from video server
+interface JobStatus {
+  jobId: string;
+  status: string;
+  progress: number;
+  outputUrl?: string;
+  error?: string;
+  errorSuggestion?: string;
+}
 
 // Video Gator's technical reference data
 const GATOR_LENSES = [
@@ -92,11 +102,18 @@ export default function VideoFoundry() {
   // Story Mode state
   const [storyMode, setStoryMode] = useState(false);
   const [storyInput, setStoryInput] = useState("");
+  const [storyModel, setStoryModel] = useState<VideoModel>("wan-2.2");
   const [scenes, setScenes] = useState<string[]>([]);
   const [generatedClips, setGeneratedClips] = useState<{scene: string; url: string; jobId: string}[]>([]);
   const [isGeneratingStory, setIsGeneratingStory] = useState(false);
   const [currentSceneIndex, setCurrentSceneIndex] = useState(-1);
   const [storyError, setStoryError] = useState<string | null>(null);
+  
+  // Stitch state
+  const [stitchJobId, setStitchJobId] = useState<string | null>(null);
+  const [stitchStatus, setStitchStatus] = useState<string | null>(null);
+  const [stitchedVideoUrl, setStitchedVideoUrl] = useState<string | null>(null);
+  const [isStitching, setIsStitching] = useState(false);
   
   // Video Gator's current setup (for visual reference)
   const [gatorLens, setGatorLens] = useState("85mm");
@@ -106,7 +123,24 @@ export default function VideoFoundry() {
   const [showGatorPanel, setShowGatorPanel] = useState(true);
 
   const createJobMutation = trpc.video.create.useMutation();
-  const generateMutation = trpc.video.generate.useMutation();
+  const generateMutation = trpc.video.generate.useMutation({
+    onSuccess: (data) => {
+      setJobId(data.jobId);
+    },
+    onError: (error) => {
+      setStoryError(`Generation failed: ${error.message}`);
+      setIsGeneratingStory(false);
+    },
+  });
+
+  // Keep a stable ref to the mutation so the story useEffect doesn't need it as a dep
+  const generateMutationRef = useRef(generateMutation);
+  useEffect(() => { generateMutationRef.current = generateMutation; });
+
+  // Track which job IDs have already been processed to prevent duplicate clips
+  // when the effect re-runs while statusQuery still shows the previous job as completed
+  const processedJobsRef = useRef<Set<string>>(new Set());
+
   const statusQuery = trpc.video.status.useQuery(
     { jobId: jobId ?? "" },
     { enabled: Boolean(jobId), refetchInterval: 3000 }
@@ -125,7 +159,7 @@ export default function VideoFoundry() {
   const canRun = operations.length > 0;
 
   const outputUrl = useMemo(() => {
-    const data: any = statusQuery.data;
+    const data: JobStatus = statusQuery.data;
     if (!data) return "";
     if (data.outputUrl) return data.outputUrl;
     if (data.stepResults) {
@@ -214,6 +248,7 @@ export default function VideoFoundry() {
       return;
     }
     
+    processedJobsRef.current = new Set();
     setScenes(parsedScenes);
     setGeneratedClips([]);
     setIsGeneratingStory(true);
@@ -225,7 +260,7 @@ export default function VideoFoundry() {
       const result = await generateMutation.mutateAsync({
         prompt: parsedScenes[0],
         negativePrompt: "",
-        model: "wan-2.2",
+        model: storyModel,
         width: 832,
         height: 480,
         numFrames: 81,
@@ -240,37 +275,124 @@ export default function VideoFoundry() {
     }
   };
 
-  // Watch for job completion and advance to next scene
+  // Handle stitch button click
+  const handleStitch = async () => {
+    if (generatedClips.length < 2) {
+      setStoryError("Need at least 2 clips to stitch");
+      return;
+    }
+    
+    const stitchWorkerUrl = import.meta.env.VITE_STITCH_WORKER_URL;
+    const stitchWorkerKey = import.meta.env.VITE_STITCH_WORKER_KEY;
+    
+    if (!stitchWorkerUrl || !stitchWorkerKey) {
+      setStoryError("Stitch worker not configured. Please set VITE_STITCH_WORKER_URL and VITE_STITCH_WORKER_KEY.");
+      return;
+    }
+    
+    setIsStitching(true);
+    setStoryError(null);
+    
+    try {
+      const clipUrls = generatedClips.map(c => c.url);
+      
+      const response = await fetch(`${stitchWorkerUrl}/stitch`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": stitchWorkerKey,
+        },
+        body: JSON.stringify({
+          clips: clipUrls,
+          transition: "fade",
+          fade_duration: 0.5,
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Stitch failed: ${response.statusText}`);
+      }
+      
+      const result = await response.json();
+      setStitchJobId(result.job_id);
+      setStitchStatus(result.status);
+      
+      // Poll for completion
+      pollStitchStatus(result.job_id, stitchWorkerUrl, stitchWorkerKey);
+    } catch (error) {
+      setStoryError(`Stitch failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+      setIsStitching(false);
+    }
+  };
+
+  // Poll stitch job status
+  const pollStitchStatus = async (jobId: string, baseUrl: string, apiKey: string) => {
+    const maxAttempts = 60;
+    let attempts = 0;
+    
+    while (attempts < maxAttempts) {
+      await new Promise(r => setTimeout(r, 2000));
+      
+      try {
+        const response = await fetch(`${baseUrl}/status/${jobId}`, {
+          headers: { "x-api-key": apiKey },
+        });
+        
+        if (!response.ok) continue;
+        
+        const status = await response.json();
+        setStitchStatus(status.status);
+        
+        if (status.status === "done" && status.output_url) {
+          setStitchedVideoUrl(`${baseUrl}${status.output_url}`);
+          setIsStitching(false);
+          return;
+        } else if (status.status === "error") {
+          setStoryError(`Stitch failed: ${status.error || "Unknown error"}`);
+          setIsStitching(false);
+          return;
+        }
+      } catch (e) {
+        // Continue polling on error
+      }
+      
+      attempts++;
+    }
+    
+    setStoryError("Stitch timed out");
+    setIsStitching(false);
+  };
+
+  // Watch for job completion and advance to next scene.
+  // NOTE: generateMutation is intentionally kept out of deps via generateMutationRef
+  // to prevent this effect from re-triggering after mutate() is called, which would
+  // cause duplicate clips to be added while statusQuery still shows the old job as completed.
   useEffect(() => {
     if (!isGeneratingStory || currentSceneIndex < 0 || !jobId || !statusQuery.data) return;
-    
-    const status = statusQuery.data as any;
+
+    const status = statusQuery.data as JobStatus;
+
     if (status.status === "completed" && status.outputUrl) {
-      // Add completed clip
-      const newClip = { scene: scenes[currentSceneIndex], url: status.outputUrl, jobId };
-      setGeneratedClips(prev => [...prev, newClip]);
-      
-      // Check if more scenes to generate
+      // Guard: each completed job should only be processed once
+      if (processedJobsRef.current.has(jobId)) return;
+      processedJobsRef.current.add(jobId);
+
+      setGeneratedClips(prev => [...prev, { scene: scenes[currentSceneIndex], url: status.outputUrl!, jobId }]);
+
       if (currentSceneIndex < scenes.length - 1) {
-        // Generate next scene
         const nextIndex = currentSceneIndex + 1;
         setCurrentSceneIndex(nextIndex);
-        
-        generateMutation.mutateAsync({
+
+        generateMutationRef.current.mutate({
           prompt: scenes[nextIndex],
           negativePrompt: "",
-          model: "wan-2.2",
+          model: storyModel,
           width: 832,
           height: 480,
           numFrames: 81,
           numInferenceSteps: 30,
           guidanceScale: 7.0,
           fps: 8,
-        }).then(result => {
-          setJobId(result.jobId);
-        }).catch(error => {
-          setStoryError(`Scene ${nextIndex + 1} failed: ${error instanceof Error ? error.message : "Unknown error"}`);
-          setIsGeneratingStory(false);
         });
       } else {
         // All scenes generated - ready for stitching
@@ -278,10 +400,11 @@ export default function VideoFoundry() {
         setCurrentSceneIndex(-1);
       }
     } else if (status.status === "failed") {
-      setStoryError(`Scene ${currentSceneIndex + 1} failed`);
+      setStoryError(`Scene ${currentSceneIndex + 1} failed: ${(status as any).error ?? "Unknown error"}`);
       setIsGeneratingStory(false);
     }
-  }, [statusQuery.data, isGeneratingStory, currentSceneIndex, jobId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusQuery.data, isGeneratingStory, currentSceneIndex, jobId, scenes, storyModel]);
 
   const handleRun = async () => {
     if (!canRun) return;
@@ -615,6 +738,27 @@ export default function VideoFoundry() {
               </p>
             </div>
 
+            {/* Model selector */}
+            <div>
+              <Label className="text-xs text-muted-foreground">Video Model</Label>
+              <Select 
+                value={storyModel} 
+                onValueChange={(value) => setStoryModel(value as VideoModel)}
+                disabled={isGeneratingStory}
+              >
+                <SelectTrigger className="mt-2">
+                  <SelectValue placeholder="Select model" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="wan-2.2">Wan 2.2 (Fast, 8GB)</SelectItem>
+                  <SelectItem value="wan-2.2-5b">Wan 2.2 5B (Better quality, 14GB)</SelectItem>
+                  <SelectItem value="hunyuan-video">Hunyuan Video (Great quality, 12GB)</SelectItem>
+                  <SelectItem value="mochi">Mochi (Anime style, 8GB)</SelectItem>
+                  <SelectItem value="ltx-2">LTX 2 (Latest, 8GB)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             {storyError && (
               <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">
                 {storyError}
@@ -671,14 +815,48 @@ export default function VideoFoundry() {
 
                 <Button 
                   className="w-full bg-gold text-background hover:bg-gold/90"
-                  onClick={() => {
-                    // TODO: Call stitch worker
-                    alert("Stitch functionality coming soon! For now, you can download each clip separately.");
-                  }}
+                  onClick={handleStitch}
+                  disabled={isStitching}
                 >
-                  <Film className="w-4 h-4 mr-2" />
-                  Stitch Together
+                  {isStitching ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Stitching...
+                    </>
+                  ) : (
+                    <>
+                      <Film className="w-4 h-4 mr-2" />
+                      Stitch Together
+                    </>
+                  )}
                 </Button>
+                
+                {/* Show stitched video result */}
+                {stitchedVideoUrl && (
+                  <div className="p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
+                    <p className="text-sm text-green-400 font-medium mb-2">
+                      ✓ Video stitched successfully!
+                    </p>
+                    <a 
+                      href={stitchedVideoUrl} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-sm text-gold hover:underline flex items-center gap-2"
+                    >
+                      <Film className="w-4 h-4" />
+                      View Final Video
+                    </a>
+                  </div>
+                )}
+                
+                {/* Show stitch status while processing */}
+                {isStitching && stitchStatus && (
+                  <div className="p-3 bg-gold/10 border border-gold/30 rounded-lg">
+                    <p className="text-sm text-gold font-medium">
+                      Status: {stitchStatus}
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 
@@ -989,7 +1167,7 @@ export default function VideoFoundry() {
       </Card>
 
       {/* Show animation when Processing */}
-      {jobId && (statusQuery.data as any)?.status === "processing" && (
+      {jobId && (statusQuery.data as JobStatus)?.status === "processing" && (
         <GeneratingAnimation
           prompt={operations.find(op => op.type === "generate")?.params.prompt}
           progress={50}
@@ -1006,7 +1184,7 @@ export default function VideoFoundry() {
             )}
           </div>
           <div className="text-sm text-muted-foreground">
-            Status: {(statusQuery.data as any)?.status ?? "queued"}
+            Status: {(statusQuery.data as JobStatus)?.status ?? "queued"}
           </div>
           {outputUrl && (
             <div className="space-y-2">
