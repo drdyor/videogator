@@ -138,7 +138,7 @@ class ModelConfig:
 MODEL_CONFIGS = {
     VideoModel.HUNYUAN_VIDEO: ModelConfig(
         name="HunyuanVideo",
-        repo_id="tencent/HunyuanVideo",
+        repo_id="hunyuanvideo-community/HunyuanVideo",  # community mirror has correct diffusers layout
         default_width=848,
         default_height=480,
         default_frames=65,
