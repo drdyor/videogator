@@ -221,22 +221,34 @@ export default function VideoFoundry() {
 
   // Story Mode functions
   const parseStoryToScenes = (story: string): string[] => {
-    // Simple parsing: split by periods, newlines, or numbered markers
-    // In production, this could call an LLM for smarter parsing
-    const rawScenes = story
-      .split(/[\.\n]+/)
+    const isLabel = (s: string) =>
+      /^clip\s+\d+\s*[—–\-]/i.test(s) ||   // "Clip 1 — Title"
+      /^\d+\.\s*$/.test(s) ||               // bare "1."
+      /^scene\s+\d+\s*[—–\-:]/i.test(s);   // "Scene 1: Title"
+
+    // Strategy 1: blank-line paragraph split — handles "Clip N\n\nDescription\n\n..." format
+    const byParagraph = story
+      .split(/\n{2,}/)
+      .map(s => s.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim())
+      .filter(s => s.length > 50)
+      .filter(s => !isLabel(s));
+    if (byParagraph.length >= 2) return byParagraph;
+
+    // Strategy 2: numbered-block split — handles "1.\nLabel\n2.\nDescription\n..." format
+    // Split on lines that are just a number+period (the odd-numbered index lines)
+    const byNumberedBlock = story
+      .split(/\n\s*\d+\.\s*\n/)
+      .map(s => s.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim())
+      .filter(s => s.length > 50)
+      .filter(s => !isLabel(s));
+    if (byNumberedBlock.length >= 2) return byNumberedBlock;
+
+    // Strategy 3: sentence/newline split fallback
+    return story
+      .split(/(?<=[.!?])\s+|\n+/)
       .map(s => s.trim())
-      .filter(s => s.length > 10); // Filter out very short fragments
-    
-    if (rawScenes.length < 2) {
-      // Try splitting by common connectors if no clear sentences
-      const fallback = story
-        .split(/,(?=\w+\s+(?:then|and|after|before|following|next|finally))/i)
-        .map(s => s.trim())
-        .filter(s => s.length > 10);
-      return fallback.length >= 2 ? fallback : rawScenes;
-    }
-    return rawScenes;
+      .filter(s => s.length > 40)
+      .filter(s => !isLabel(s));
   };
 
   const startStoryGeneration = async () => {

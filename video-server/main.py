@@ -842,6 +842,10 @@ async def generate_video_task(job_id: str, request: GenerateRequest):
             logger.info(f"Job {job_id} ({request.model.value}) completed via Replicate: {video_path}")
             return
 
+        # Free any VRAM left over from previous jobs before loading model
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
         generator = get_generator(request.model)
 
         # Run generation in thread pool
@@ -857,6 +861,9 @@ async def generate_video_task(job_id: str, request: GenerateRequest):
         jobs[job_id]["output_url"] = f"/output/{video_path.name}"
 
         logger.info(f"Job {job_id} completed: {video_path}")
+        # Release VRAM after generation so the next job starts with a clean GPU state
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
         
     except Exception as e:
         logger.error(f"Job {job_id} failed: {e}")
@@ -919,11 +926,15 @@ async def generate_video_task(job_id: str, request: GenerateRequest):
                 jobs[job_id]["status"] = "failed"
                 jobs[job_id]["error"] = f"{e} | fallback error: {e2}"
                 # Keep any suggestion set above
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
                 return
 
         # Non-OOM or fallback path: record failure
         jobs[job_id]["status"] = "failed"
         jobs[job_id]["error"] = str(e)
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
         try:
             suggestion = estimate_suggestion_for_request(request)
             jobs[job_id]["error_suggestion"] = suggestion
