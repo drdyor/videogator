@@ -16,6 +16,7 @@ from enum import Enum
 
 import torch
 from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
@@ -25,8 +26,17 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Local Video Generation Server", version="1.0.0")
 
-# Configuration
-OUTPUT_DIR = Path(os.getenv("OUTPUT_DIR", "/tmp/video-output"))
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Configuration — use a platform-appropriate default temp dir on Windows
+_default_output = str(Path.home() / "AppData" / "Local" / "Temp" / "video-output") if os.name == "nt" else "/tmp/video-output"
+OUTPUT_DIR = Path(os.getenv("OUTPUT_DIR", _default_output))
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Check for GPU
