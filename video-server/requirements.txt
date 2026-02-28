@@ -20,3 +20,7 @@ einops>=0.7.0
 omegaconf>=2.3.0
 decord>=0.6.0
 av>=11.0.0
+
+# Cloud model support
+replicate>=1.0.0
+httpx>=0.27.0

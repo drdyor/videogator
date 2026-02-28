@@ -15,7 +15,7 @@ import PromptBuilder from "@/components/PromptBuilder";
 import GatorMascot from "@/components/GatorMascot";
 import { Textarea } from "@/components/ui/textarea";
 
-type VideoModel = "hunyuan-video" | "mochi" | "cogvideo" | "modelscope" | "stable-video-diffusion" | "wan-2.2" | "wan-2.2-5b" | "ltx-2";
+type VideoModel = "hunyuan-video" | "mochi" | "cogvideo" | "modelscope" | "stable-video-diffusion" | "wan-2.2" | "wan-2.2-5b" | "ltx-2" | "humo";
 
 // Job status from video server
 interface JobStatus {
@@ -103,6 +103,8 @@ export default function VideoFoundry() {
   const [storyMode, setStoryMode] = useState(false);
   const [storyInput, setStoryInput] = useState("");
   const [storyModel, setStoryModel] = useState<VideoModel>("wan-2.2");
+  const [storyReferenceImageUrl, setStoryReferenceImageUrl] = useState("");
+  const [storyAudioUrl, setStoryAudioUrl] = useState("");
   const [scenes, setScenes] = useState<string[]>([]);
   const [generatedClips, setGeneratedClips] = useState<{scene: string; url: string; jobId: string}[]>([]);
   const [isGeneratingStory, setIsGeneratingStory] = useState(false);
@@ -255,18 +257,21 @@ export default function VideoFoundry() {
     setStoryError(null);
     setCurrentSceneIndex(0);
     
+    // Build base params — HuMo uses different defaults (1280×720, 49 frames, 25fps)
+    const isHumo = storyModel === "humo";
+    const baseParams = isHumo
+      ? { width: 1280, height: 720, numFrames: 49, numInferenceSteps: 50, guidanceScale: 5.0, fps: 25 }
+      : { width: 832, height: 480, numFrames: 81, numInferenceSteps: 30, guidanceScale: 7.0, fps: 8 };
+
     // Generate first scene
     try {
       const result = await generateMutation.mutateAsync({
         prompt: parsedScenes[0],
         negativePrompt: "",
         model: storyModel,
-        width: 832,
-        height: 480,
-        numFrames: 81,
-        numInferenceSteps: 30,
-        guidanceScale: 7.0,
-        fps: 8,
+        ...baseParams,
+        ...(isHumo && storyReferenceImageUrl ? { imageUrl: storyReferenceImageUrl } : {}),
+        ...(isHumo && storyAudioUrl ? { audioUrl: storyAudioUrl } : {}),
       });
       setJobId(result.jobId);
     } catch (error) {
@@ -383,16 +388,18 @@ export default function VideoFoundry() {
         const nextIndex = currentSceneIndex + 1;
         setCurrentSceneIndex(nextIndex);
 
+        const isHumo = storyModel === "humo";
+        const nextParams = isHumo
+          ? { width: 1280, height: 720, numFrames: 49, numInferenceSteps: 50, guidanceScale: 5.0, fps: 25 }
+          : { width: 832, height: 480, numFrames: 81, numInferenceSteps: 30, guidanceScale: 7.0, fps: 8 };
+
         generateMutationRef.current.mutate({
           prompt: scenes[nextIndex],
           negativePrompt: "",
           model: storyModel,
-          width: 832,
-          height: 480,
-          numFrames: 81,
-          numInferenceSteps: 30,
-          guidanceScale: 7.0,
-          fps: 8,
+          ...nextParams,
+          ...(isHumo && storyReferenceImageUrl ? { imageUrl: storyReferenceImageUrl } : {}),
+          ...(isHumo && storyAudioUrl ? { audioUrl: storyAudioUrl } : {}),
         });
       } else {
         // All scenes generated - ready for stitching
@@ -750,14 +757,44 @@ export default function VideoFoundry() {
                   <SelectValue placeholder="Select model" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="wan-2.2">Wan 2.2 (Fast, 8GB)</SelectItem>
-                  <SelectItem value="wan-2.2-5b">Wan 2.2 5B (Better quality, 14GB)</SelectItem>
-                  <SelectItem value="hunyuan-video">Hunyuan Video (Great quality, 12GB)</SelectItem>
-                  <SelectItem value="mochi">Mochi (Anime style, 8GB)</SelectItem>
-                  <SelectItem value="ltx-2">LTX 2 (Latest, 8GB)</SelectItem>
+                  <SelectItem value="wan-2.2">Wan 2.2 (Fast, 8GB local)</SelectItem>
+                  <SelectItem value="wan-2.2-5b">Wan 2.2 5B (Better quality, 14GB local)</SelectItem>
+                  <SelectItem value="hunyuan-video">Hunyuan Video (Great quality, 12GB local)</SelectItem>
+                  <SelectItem value="mochi">Mochi (Anime style, 8GB local)</SelectItem>
+                  <SelectItem value="ltx-2">LTX 2 (Latest, 8GB local)</SelectItem>
+                  <SelectItem value="humo">HuMo — ByteDance (Human-centric, Replicate cloud ☁️)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+
+            {/* HuMo-specific inputs */}
+            {storyModel === "humo" && (
+              <div className="space-y-3 p-3 bg-gold/5 border border-gold/20 rounded-lg">
+                <p className="text-xs text-gold font-medium">
+                  ☁️ HuMo runs on Replicate cloud — requires <code className="bg-gold/10 px-1 rounded">REPLICATE_API_TOKEN</code> in your .env
+                </p>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Reference Image URL (optional — locks character appearance)</Label>
+                  <Input
+                    placeholder="https://example.com/person.jpg"
+                    value={storyReferenceImageUrl}
+                    onChange={(e) => setStoryReferenceImageUrl(e.target.value)}
+                    className="mt-1"
+                    disabled={isGeneratingStory}
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Audio URL (optional — enables lip-sync, MP3/WAV)</Label>
+                  <Input
+                    placeholder="https://example.com/audio.mp3"
+                    value={storyAudioUrl}
+                    onChange={(e) => setStoryAudioUrl(e.target.value)}
+                    className="mt-1"
+                    disabled={isGeneratingStory}
+                  />
+                </div>
+              </div>
+            )}
 
             {storyError && (
               <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">
@@ -781,7 +818,7 @@ export default function VideoFoundry() {
 
             {isGeneratingStory && (
               <GeneratingAnimation 
-                message={`Generating scene ${currentSceneIndex + 1} of ${scenes.length}...`}
+                prompt={`Generating scene ${currentSceneIndex + 1} of ${scenes.length}`}
               />
             )}
 

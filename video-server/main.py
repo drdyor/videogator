@@ -34,10 +34,27 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Add CORS headers to all responses
+@app.middleware("http")
+async def add_cors_headers(request, call_next):
+    response = await call_next(request)
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "*"
+    return response
+
 # Configuration — use a platform-appropriate default temp dir on Windows
-_default_output = str(Path.home() / "AppData" / "Local" / "Temp" / "video-output") if os.name == "nt" else "/tmp/video-output"
+if os.name == "nt":
+    # Windows: use TEMP or TMP environment variable
+    _temp_dir = os.getenv("TEMP") or os.getenv("TMP") or str(Path.home() / "AppData" / "Local" / "Temp")
+    _default_output = str(Path(_temp_dir) / "video-output")
+else:
+    # Unix: use /tmp
+    _default_output = "/tmp/video-output"
+
 OUTPUT_DIR = Path(os.getenv("OUTPUT_DIR", _default_output))
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+logger.info(f"Output directory: {OUTPUT_DIR}")
 
 # Check for GPU
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
@@ -57,6 +74,7 @@ class VideoModel(str, Enum):
     WAN_22 = "wan-2.2"
     WAN_22_5B = "wan-2.2-5b"
     LTX_2 = "ltx-2"
+    HUMO = "humo"
 
 
 class GenerateRequest(BaseModel):
@@ -74,6 +92,10 @@ class GenerateRequest(BaseModel):
     # Image-to-video specific
     image_url: Optional[str] = Field(default=None, description="Input image URL for image-to-video")
     image_base64: Optional[str] = Field(default=None, description="Input image base64 for image-to-video")
+
+    # HuMo-specific (Replicate cloud model)
+    audio_url: Optional[str] = Field(default=None, description="Input audio URL for HuMo lip-sync")
+    audio_guidance_scale: float = Field(default=5.5, ge=2.0, le=15.0, description="Audio guidance scale (HuMo only)")
 
 
 class GenerateResponse(BaseModel):
@@ -198,6 +220,16 @@ MODEL_CONFIGS = {
         supports_image_to_video=False,
         base_vram_gb=10.0,
         per_frame_vram_gb=0.05,
+    ),
+    VideoModel.HUMO: ModelConfig(
+        name="HuMo (ByteDance via Replicate)",
+        repo_id="zsxkib/humo",
+        default_width=1280,
+        default_height=720,
+        default_frames=49,
+        supports_image_to_video=True,
+        base_vram_gb=0.0,   # runs on Replicate cloud (8x H100)
+        per_frame_vram_gb=0.0,
     ),
 }
 
@@ -608,6 +640,83 @@ class LTX2Generator(VideoGenerator):
         return video_path
 
 
+async def generate_humo_via_replicate(job_id: str, request: GenerateRequest, output_path: Path) -> Path:
+    """Generate video using HuMo (ByteDance) via Replicate cloud API."""
+    import httpx
+
+    api_token = os.getenv("REPLICATE_API_TOKEN", "")
+    if not api_token:
+        raise ValueError(
+            "REPLICATE_API_TOKEN is not set. "
+            "Get a token at https://replicate.com/account/api-tokens and add it to your .env"
+        )
+
+    input_data: Dict[str, Any] = {
+        "prompt": request.prompt,
+        "negative_prompt": request.negative_prompt or "blurry, low quality, distorted, bad anatomy",
+        "num_frames": min(request.num_frames, 97),
+        "num_inference_steps": request.num_inference_steps,
+        "guidance_scale": request.guidance_scale,
+        "audio_guidance_scale": request.audio_guidance_scale,
+    }
+    if request.seed is not None:
+        input_data["seed"] = request.seed
+    if request.image_url:
+        input_data["reference_image"] = request.image_url
+    if request.audio_url:
+        input_data["audio"] = request.audio_url
+
+    auth_headers = {
+        "Authorization": f"Bearer {api_token}",
+        "Content-Type": "application/json",
+    }
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        logger.info(f"Creating HuMo Replicate prediction for job {job_id}")
+        resp = await client.post(
+            "https://api.replicate.com/v1/models/zsxkib/humo/predictions",
+            headers=auth_headers,
+            json={"input": input_data},
+        )
+        if resp.status_code not in (200, 201):
+            raise RuntimeError(f"Replicate API error {resp.status_code}: {resp.text}")
+
+        prediction = resp.json()
+        prediction_id = prediction["id"]
+        logger.info(f"HuMo prediction {prediction_id} created for job {job_id}")
+        jobs[job_id]["replicate_prediction_id"] = prediction_id
+
+        poll_url = f"https://api.replicate.com/v1/predictions/{prediction_id}"
+        poll_headers = {"Authorization": f"Bearer {api_token}"}
+
+        while True:
+            await asyncio.sleep(5)
+            poll_resp = await client.get(poll_url, headers=poll_headers)
+            poll_resp.raise_for_status()
+            status_data = poll_resp.json()
+            status = status_data.get("status")
+            logger.info(f"HuMo {prediction_id}: {status}")
+
+            if status == "starting":
+                jobs[job_id]["progress"] = 0.1
+            elif status == "processing":
+                current = jobs[job_id].get("progress", 0.1)
+                jobs[job_id]["progress"] = min(0.9, current + 0.04)
+            elif status == "succeeded":
+                output_url = status_data.get("output")
+                if not output_url:
+                    raise RuntimeError("HuMo returned no output URL")
+                logger.info(f"Downloading HuMo output from {output_url}")
+                video_path = output_path.with_suffix(".mp4")
+                dl = await client.get(output_url, follow_redirects=True, timeout=120.0)
+                dl.raise_for_status()
+                video_path.write_bytes(dl.content)
+                return video_path
+            elif status in ("failed", "canceled"):
+                error = status_data.get("error") or f"prediction {status}"
+                raise RuntimeError(f"HuMo generation {status}: {error}")
+
+
 # Generator factory
 def get_generator(model: VideoModel) -> VideoGenerator:
     generators = {
@@ -633,10 +742,20 @@ async def generate_video_task(job_id: str, request: GenerateRequest):
     try:
         jobs[job_id]["status"] = "processing"
         jobs[job_id]["progress"] = 0.0
-        
+
         output_path = OUTPUT_DIR / f"{job_id}"
+
+        # HuMo runs on Replicate cloud — handle before local generator path
+        if request.model == VideoModel.HUMO:
+            video_path = await generate_humo_via_replicate(job_id, request, output_path)
+            jobs[job_id]["status"] = "completed"
+            jobs[job_id]["progress"] = 1.0
+            jobs[job_id]["output_url"] = f"/output/{video_path.name}"
+            logger.info(f"Job {job_id} (HuMo) completed: {video_path}")
+            return
+
         generator = get_generator(request.model)
-        
+
         # Run generation in thread pool
         loop = asyncio.get_event_loop()
         # Primary generation attempt
@@ -644,11 +763,11 @@ async def generate_video_task(job_id: str, request: GenerateRequest):
             None,
             lambda: generator.generate(request, output_path)
         )
-        
+
         jobs[job_id]["status"] = "completed"
         jobs[job_id]["progress"] = 1.0
         jobs[job_id]["output_url"] = f"/output/{video_path.name}"
-        
+
         logger.info(f"Job {job_id} completed: {video_path}")
         
     except Exception as e:
@@ -798,11 +917,13 @@ async def get_output(filename: str):
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
     
-    return FileResponse(
+    response = FileResponse(
         file_path,
         media_type="video/mp4",
         filename=filename,
     )
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    return response
 
 
 @app.get("/models")

@@ -207,7 +207,7 @@ export const appRouter = router({
     generate: protectedProcedure.input(z.object({
       prompt: z.string(),
       negativePrompt: z.string().optional(),
-      model: z.enum(["hunyuan-video", "mochi", "cogvideo", "modelscope", "stable-video-diffusion", "wan-2.2", "wan-2.2-5b", "ltx-2"]).optional(),
+      model: z.enum(["hunyuan-video", "mochi", "cogvideo", "modelscope", "stable-video-diffusion", "wan-2.2", "wan-2.2-5b", "ltx-2", "humo"]).optional(),
       width: z.number().optional(),
       height: z.number().optional(),
       numFrames: z.number().optional(),
@@ -216,12 +216,14 @@ export const appRouter = router({
       seed: z.number().optional(),
       fps: z.number().optional(),
       imageUrl: z.string().optional(),
+      audioUrl: z.string().optional(),
+      audioGuidanceScale: z.number().optional(),
     })).mutation(async ({ input }) => {
       const VIDEO_SERVER_URL = process.env.VIDEO_SERVER_URL;
       if (!VIDEO_SERVER_URL) {
-        throw new TRPCError({ 
-          code: "PRECONDITION_FAILED", 
-          message: "VIDEO_SERVER_URL is not configured. Please set up the local video server." 
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "VIDEO_SERVER_URL is not configured. Please set up the local video server.",
         });
       }
 
@@ -241,6 +243,8 @@ export const appRouter = router({
             seed: input.seed,
             fps: input.fps ?? 24,
             image_url: input.imageUrl,
+            audio_url: input.audioUrl,
+            audio_guidance_scale: input.audioGuidanceScale,
           }),
         });
 
