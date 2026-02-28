@@ -207,7 +207,7 @@ export const appRouter = router({
     generate: protectedProcedure.input(z.object({
       prompt: z.string(),
       negativePrompt: z.string().optional(),
-      model: z.enum(["hunyuan-video", "mochi", "cogvideo", "modelscope", "stable-video-diffusion", "wan-2.2", "wan-2.2-5b", "ltx-2", "humo"]).optional(),
+      model: z.enum(["hunyuan-video", "mochi", "cogvideo", "modelscope", "stable-video-diffusion", "wan-2.2", "wan-2.2-5b", "ltx-2", "humo", "kling-2.5", "luma-ray-flash-2", "minimax-video-01"]).optional(),
       width: z.number().optional(),
       height: z.number().optional(),
       numFrames: z.number().optional(),

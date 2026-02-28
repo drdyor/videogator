@@ -83,5 +83,43 @@ taskkill /PID REPLACE_PID /F
 - **Model licenses**: Confirm any commercial model licensing or access tokens are in place for third-party providers.
 - **Hardware access**: If the GPU host is remote, confirm SSH/remote desktop access and that the user has admin rights to restart services.
 
+---
+
+## PRIORITY 2: Activate HuMo + Replicate Cloud Models
+
+HuMo (ByteDance), Kling 2.5, Luma Ray Flash 2, and MiniMax Video 01 are now integrated in the
+video server — they run on Replicate cloud so no local VRAM is needed. You only need an API token.
+
+### Steps
+
+1. Sign up / log in at https://replicate.com
+
+2. Generate an API token at https://replicate.com/account/api-tokens
+
+3. Add the token to your `.env` file (project root):
+   ```
+   REPLICATE_API_TOKEN=r8_xxxxxxxxxxxxxxxxxxxx
+   ```
+
+4. Restart the Node.js dev server so it picks up the new env var:
+   ```powershell
+   # Ctrl+C the running server, then:
+   cd C:\Users\Forre\videogator
+   pnpm dev
+   ```
+
+5. In Story Mode, select any of the cloud models from the dropdown:
+   - **HuMo** — human-centric, supports reference image + audio lip-sync (1280×720)
+   - **Kling 2.5 Turbo** — fast, cinematic quality (text + optional image-to-video)
+   - **Luma Ray Flash 2** — camera-control aware, very fast (text + optional image)
+   - **MiniMax Video 01** — text + image, good motion quality
+
+### Notes
+- Cloud models bill to your Replicate account per generation (~$0.05–$0.30 per video depending on length)
+- Reference: https://github.com/Almazlum/cog-ByteDance-Phantom-HuMo (HuMo source)
+- Reference: https://github.com/MarketAlly/Replicate.Maui (model list source)
+
+---
+
 End of TODO
 ```

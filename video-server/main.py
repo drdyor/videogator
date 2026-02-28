@@ -65,6 +65,7 @@ if DEVICE == "cuda":
 
 
 class VideoModel(str, Enum):
+    # ── Local models (run on your GPU) ──────────────────────────────────────
     HUNYUAN_VIDEO = "hunyuan-video"
     MOCHI = "mochi"
     COGVIDEO = "cogvideo"
@@ -74,7 +75,11 @@ class VideoModel(str, Enum):
     WAN_22 = "wan-2.2"
     WAN_22_5B = "wan-2.2-5b"
     LTX_2 = "ltx-2"
+    # ── Replicate cloud models ───────────────────────────────────────────────
     HUMO = "humo"
+    KLING_25 = "kling-2.5"
+    LUMA_RAY = "luma-ray-flash-2"
+    MINIMAX = "minimax-video-01"
 
 
 class GenerateRequest(BaseModel):
@@ -222,13 +227,43 @@ MODEL_CONFIGS = {
         per_frame_vram_gb=0.05,
     ),
     VideoModel.HUMO: ModelConfig(
-        name="HuMo (ByteDance via Replicate)",
+        name="HuMo — ByteDance (Replicate ☁)",
         repo_id="zsxkib/humo",
         default_width=1280,
         default_height=720,
         default_frames=49,
         supports_image_to_video=True,
-        base_vram_gb=0.0,   # runs on Replicate cloud (8x H100)
+        base_vram_gb=0.0,
+        per_frame_vram_gb=0.0,
+    ),
+    VideoModel.KLING_25: ModelConfig(
+        name="Kling 2.5 Turbo (Replicate ☁)",
+        repo_id="klingai/kling-2.5-turbo",
+        default_width=1280,
+        default_height=720,
+        default_frames=0,   # Kling uses duration_seconds instead of frames
+        supports_image_to_video=True,
+        base_vram_gb=0.0,
+        per_frame_vram_gb=0.0,
+    ),
+    VideoModel.LUMA_RAY: ModelConfig(
+        name="Luma Ray Flash 2 (Replicate ☁)",
+        repo_id="luma/ray-flash-2",
+        default_width=1360,
+        default_height=752,
+        default_frames=0,
+        supports_image_to_video=True,
+        base_vram_gb=0.0,
+        per_frame_vram_gb=0.0,
+    ),
+    VideoModel.MINIMAX: ModelConfig(
+        name="MiniMax Video 01 (Replicate ☁)",
+        repo_id="minimax/video-01",
+        default_width=1280,
+        default_height=720,
+        default_frames=0,
+        supports_image_to_video=True,
+        base_vram_gb=0.0,
         per_frame_vram_gb=0.0,
     ),
 }
@@ -640,41 +675,93 @@ class LTX2Generator(VideoGenerator):
         return video_path
 
 
-async def generate_humo_via_replicate(job_id: str, request: GenerateRequest, output_path: Path) -> Path:
-    """Generate video using HuMo (ByteDance) via Replicate cloud API."""
+# ── Replicate cloud models ────────────────────────────────────────────────────
+
+REPLICATE_CLOUD_MODELS = {VideoModel.HUMO, VideoModel.KLING_25, VideoModel.LUMA_RAY, VideoModel.MINIMAX}
+
+
+def _build_replicate_input(model: VideoModel, request: GenerateRequest) -> Dict[str, Any]:
+    """Build the input payload for each Replicate model from a GenerateRequest."""
+    prompt = request.prompt
+    neg = request.negative_prompt or "blurry, low quality, distorted"
+    seed = request.seed
+
+    if model == VideoModel.HUMO:
+        data: Dict[str, Any] = {
+            "prompt": prompt,
+            "negative_prompt": neg,
+            "num_frames": min(request.num_frames, 97),
+            "num_inference_steps": request.num_inference_steps,
+            "guidance_scale": request.guidance_scale,
+            "audio_guidance_scale": request.audio_guidance_scale,
+        }
+        if seed is not None:
+            data["seed"] = seed
+        if request.image_url:
+            data["reference_image"] = request.image_url
+        if request.audio_url:
+            data["audio"] = request.audio_url
+        return data
+
+    if model == VideoModel.KLING_25:
+        data = {
+            "prompt": prompt,
+            "negative_prompt": neg,
+            "duration": 5,          # seconds (Kling uses duration, not frames)
+            "aspect_ratio": "16:9",
+            "cfg_scale": request.guidance_scale,
+        }
+        if seed is not None:
+            data["seed"] = seed
+        if request.image_url:
+            data["start_image"] = request.image_url
+        return data
+
+    if model == VideoModel.LUMA_RAY:
+        data = {
+            "prompt": prompt,
+            "duration": "5s",
+            "resolution": "720p",
+            "aspect_ratio": "16:9",
+        }
+        if seed is not None:
+            data["seed"] = seed
+        if request.image_url:
+            data["keyframes"] = {"frame0": {"type": "image", "url": request.image_url}}
+        return data
+
+    if model == VideoModel.MINIMAX:
+        data = {
+            "prompt": prompt,
+        }
+        if request.image_url:
+            data["first_frame_image"] = request.image_url
+        return data
+
+    raise ValueError(f"No Replicate input builder for {model}")
+
+
+async def generate_via_replicate(job_id: str, request: GenerateRequest, output_path: Path) -> Path:
+    """Generic Replicate cloud generation — handles HuMo, Kling, Luma, MiniMax."""
     import httpx
 
     api_token = os.getenv("REPLICATE_API_TOKEN", "")
     if not api_token:
         raise ValueError(
             "REPLICATE_API_TOKEN is not set. "
-            "Get a token at https://replicate.com/account/api-tokens and add it to your .env"
+            "Get yours at https://replicate.com/account/api-tokens and add it to .env"
         )
 
-    input_data: Dict[str, Any] = {
-        "prompt": request.prompt,
-        "negative_prompt": request.negative_prompt or "blurry, low quality, distorted, bad anatomy",
-        "num_frames": min(request.num_frames, 97),
-        "num_inference_steps": request.num_inference_steps,
-        "guidance_scale": request.guidance_scale,
-        "audio_guidance_scale": request.audio_guidance_scale,
-    }
-    if request.seed is not None:
-        input_data["seed"] = request.seed
-    if request.image_url:
-        input_data["reference_image"] = request.image_url
-    if request.audio_url:
-        input_data["audio"] = request.audio_url
+    model_cfg = MODEL_CONFIGS[request.model]
+    repo_id = model_cfg.repo_id
+    input_data = _build_replicate_input(request.model, request)
 
-    auth_headers = {
-        "Authorization": f"Bearer {api_token}",
-        "Content-Type": "application/json",
-    }
+    auth_headers = {"Authorization": f"Bearer {api_token}", "Content-Type": "application/json"}
 
     async with httpx.AsyncClient(timeout=30.0) as client:
-        logger.info(f"Creating HuMo Replicate prediction for job {job_id}")
+        logger.info(f"Creating Replicate prediction [{repo_id}] for job {job_id}")
         resp = await client.post(
-            "https://api.replicate.com/v1/models/zsxkib/humo/predictions",
+            f"https://api.replicate.com/v1/models/{repo_id}/predictions",
             headers=auth_headers,
             json={"input": input_data},
         )
@@ -683,7 +770,7 @@ async def generate_humo_via_replicate(job_id: str, request: GenerateRequest, out
 
         prediction = resp.json()
         prediction_id = prediction["id"]
-        logger.info(f"HuMo prediction {prediction_id} created for job {job_id}")
+        logger.info(f"Prediction {prediction_id} created for job {job_id}")
         jobs[job_id]["replicate_prediction_id"] = prediction_id
 
         poll_url = f"https://api.replicate.com/v1/predictions/{prediction_id}"
@@ -693,28 +780,29 @@ async def generate_humo_via_replicate(job_id: str, request: GenerateRequest, out
             await asyncio.sleep(5)
             poll_resp = await client.get(poll_url, headers=poll_headers)
             poll_resp.raise_for_status()
-            status_data = poll_resp.json()
-            status = status_data.get("status")
-            logger.info(f"HuMo {prediction_id}: {status}")
+            data = poll_resp.json()
+            status = data.get("status")
+            logger.info(f"Replicate {prediction_id}: {status}")
 
             if status == "starting":
                 jobs[job_id]["progress"] = 0.1
             elif status == "processing":
-                current = jobs[job_id].get("progress", 0.1)
-                jobs[job_id]["progress"] = min(0.9, current + 0.04)
+                jobs[job_id]["progress"] = min(0.9, jobs[job_id].get("progress", 0.1) + 0.04)
             elif status == "succeeded":
-                output_url = status_data.get("output")
+                output = data.get("output")
+                # Some models return a list, some a string
+                output_url = output[0] if isinstance(output, list) else output
                 if not output_url:
-                    raise RuntimeError("HuMo returned no output URL")
-                logger.info(f"Downloading HuMo output from {output_url}")
+                    raise RuntimeError(f"{model_cfg.name} returned no output URL")
+                logger.info(f"Downloading output from {output_url}")
                 video_path = output_path.with_suffix(".mp4")
                 dl = await client.get(output_url, follow_redirects=True, timeout=120.0)
                 dl.raise_for_status()
                 video_path.write_bytes(dl.content)
                 return video_path
             elif status in ("failed", "canceled"):
-                error = status_data.get("error") or f"prediction {status}"
-                raise RuntimeError(f"HuMo generation {status}: {error}")
+                error = data.get("error") or f"prediction {status}"
+                raise RuntimeError(f"{model_cfg.name} {status}: {error}")
 
 
 # Generator factory
@@ -745,13 +833,13 @@ async def generate_video_task(job_id: str, request: GenerateRequest):
 
         output_path = OUTPUT_DIR / f"{job_id}"
 
-        # HuMo runs on Replicate cloud — handle before local generator path
-        if request.model == VideoModel.HUMO:
-            video_path = await generate_humo_via_replicate(job_id, request, output_path)
+        # Replicate cloud models — handle before local generator path
+        if request.model in REPLICATE_CLOUD_MODELS:
+            video_path = await generate_via_replicate(job_id, request, output_path)
             jobs[job_id]["status"] = "completed"
             jobs[job_id]["progress"] = 1.0
             jobs[job_id]["output_url"] = f"/output/{video_path.name}"
-            logger.info(f"Job {job_id} (HuMo) completed: {video_path}")
+            logger.info(f"Job {job_id} ({request.model.value}) completed via Replicate: {video_path}")
             return
 
         generator = get_generator(request.model)
