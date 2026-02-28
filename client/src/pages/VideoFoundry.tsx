@@ -9,10 +9,11 @@ import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, Plus, Play, Trash2, Settings2, Server, CheckCircle2, XCircle, Info, Eye, Film, Lightbulb, Camera, Aperture, Clapperboard } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import GeneratingAnimation from "@/components/GeneratingAnimation";
 import PromptBuilder from "@/components/PromptBuilder";
 import GatorMascot from "@/components/GatorMascot";
+import { Textarea } from "@/components/ui/textarea";
 
 type VideoModel = "hunyuan-video" | "mochi" | "cogvideo" | "modelscope" | "stable-video-diffusion" | "wan-2.2" | "wan-2.2-5b" | "ltx-2";
 
@@ -88,6 +89,15 @@ export default function VideoFoundry() {
   const [jobId, setJobId] = useState<string | null>(null);
   const [operations, setOperations] = useState<Operation[]>([]);
   
+  // Story Mode state
+  const [storyMode, setStoryMode] = useState(false);
+  const [storyInput, setStoryInput] = useState("");
+  const [scenes, setScenes] = useState<string[]>([]);
+  const [generatedClips, setGeneratedClips] = useState<{scene: string; url: string; jobId: string}[]>([]);
+  const [isGeneratingStory, setIsGeneratingStory] = useState(false);
+  const [currentSceneIndex, setCurrentSceneIndex] = useState(-1);
+  const [storyError, setStoryError] = useState<string | null>(null);
+  
   // Video Gator's current setup (for visual reference)
   const [gatorLens, setGatorLens] = useState("85mm");
   const [gatorLighting, setGatorLighting] = useState("low-key");
@@ -153,7 +163,7 @@ export default function VideoFoundry() {
           numFrames: defaults.numFrames,
           numInferenceSteps: 30,
           guidanceScale: 7.0,
-          fps: 24,
+          fps: 8,
         },
       },
     ]);
@@ -174,6 +184,104 @@ export default function VideoFoundry() {
   const removeOperation = (id: string) => {
     setOperations(prev => prev.filter(op => op.id !== id));
   };
+
+  // Story Mode functions
+  const parseStoryToScenes = (story: string): string[] => {
+    // Simple parsing: split by periods, newlines, or numbered markers
+    // In production, this could call an LLM for smarter parsing
+    const rawScenes = story
+      .split(/[\.\n]+/)
+      .map(s => s.trim())
+      .filter(s => s.length > 10); // Filter out very short fragments
+    
+    if (rawScenes.length < 2) {
+      // Try splitting by common connectors if no clear sentences
+      const fallback = story
+        .split(/,(?=\w+\s+(?:then|and|after|before|following|next|finally))/i)
+        .map(s => s.trim())
+        .filter(s => s.length > 10);
+      return fallback.length >= 2 ? fallback : rawScenes;
+    }
+    return rawScenes;
+  };
+
+  const startStoryGeneration = async () => {
+    if (!storyInput.trim() || !serverAvailable) return;
+    
+    const parsedScenes = parseStoryToScenes(storyInput);
+    if (parsedScenes.length < 2) {
+      setStoryError("Please enter a longer story with at least 2 scenes (separated by periods or new lines)");
+      return;
+    }
+    
+    setScenes(parsedScenes);
+    setGeneratedClips([]);
+    setIsGeneratingStory(true);
+    setStoryError(null);
+    setCurrentSceneIndex(0);
+    
+    // Generate first scene
+    try {
+      const result = await generateMutation.mutateAsync({
+        prompt: parsedScenes[0],
+        negativePrompt: "",
+        model: "wan-2.2",
+        width: 832,
+        height: 480,
+        numFrames: 81,
+        numInferenceSteps: 30,
+        guidanceScale: 7.0,
+        fps: 8,
+      });
+      setJobId(result.jobId);
+    } catch (error) {
+      setStoryError(`Generation failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+      setIsGeneratingStory(false);
+    }
+  };
+
+  // Watch for job completion and advance to next scene
+  useEffect(() => {
+    if (!isGeneratingStory || currentSceneIndex < 0 || !jobId || !statusQuery.data) return;
+    
+    const status = statusQuery.data as any;
+    if (status.status === "completed" && status.outputUrl) {
+      // Add completed clip
+      const newClip = { scene: scenes[currentSceneIndex], url: status.outputUrl, jobId };
+      setGeneratedClips(prev => [...prev, newClip]);
+      
+      // Check if more scenes to generate
+      if (currentSceneIndex < scenes.length - 1) {
+        // Generate next scene
+        const nextIndex = currentSceneIndex + 1;
+        setCurrentSceneIndex(nextIndex);
+        
+        generateMutation.mutateAsync({
+          prompt: scenes[nextIndex],
+          negativePrompt: "",
+          model: "wan-2.2",
+          width: 832,
+          height: 480,
+          numFrames: 81,
+          numInferenceSteps: 30,
+          guidanceScale: 7.0,
+          fps: 8,
+        }).then(result => {
+          setJobId(result.jobId);
+        }).catch(error => {
+          setStoryError(`Scene ${nextIndex + 1} failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+          setIsGeneratingStory(false);
+        });
+      } else {
+        // All scenes generated - ready for stitching
+        setIsGeneratingStory(false);
+        setCurrentSceneIndex(-1);
+      }
+    } else if (status.status === "failed") {
+      setStoryError(`Scene ${currentSceneIndex + 1} failed`);
+      setIsGeneratingStory(false);
+    }
+  }, [statusQuery.data, isGeneratingStory, currentSceneIndex, jobId]);
 
   const handleRun = async () => {
     if (!canRun) return;
@@ -464,6 +572,132 @@ export default function VideoFoundry() {
             </ol>
           </div>
         </div>
+      </Card>
+
+      {/* Story Mode */}
+      <Card className="art-deco-card p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Film className="w-5 h-5 text-gold" />
+            <h3 className="font-display font-semibold text-gold">Story Mode</h3>
+          </div>
+          <Button 
+            variant="outline" 
+            size="sm"
+            className="border-gold-dim/40 text-gold"
+            onClick={() => {
+              setStoryMode(!storyMode);
+              if (storyMode) {
+                setStoryInput("");
+                setScenes([]);
+                setGeneratedClips([]);
+                setStoryError(null);
+              }
+            }}
+          >
+            {storyMode ? "Switch to Pipeline" : "Try Story Mode"}
+          </Button>
+        </div>
+        
+        {storyMode ? (
+          <div className="space-y-4">
+            <div>
+              <Label className="text-xs text-muted-foreground">Your Story / Script</Label>
+              <Textarea
+                placeholder="A dragon flies over a medieval castle. The dragon lands in a meadow. It breathes fire into the sky."
+                value={storyInput}
+                onChange={(e) => setStoryInput(e.target.value)}
+                className="mt-2 min-h-[120px]"
+                disabled={isGeneratingStory}
+              />
+              <p className="text-xs text-gold-dim mt-2">
+                Enter a narrative with multiple scenes separated by periods or new lines.
+              </p>
+            </div>
+
+            {storyError && (
+              <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">
+                {storyError}
+              </div>
+            )}
+
+            {scenes.length > 0 && !isGeneratingStory && generatedClips.length === 0 && (
+              <div className="p-3 bg-gold/10 border border-gold/30 rounded-lg">
+                <p className="text-sm text-gold font-medium mb-2">Parsed {scenes.length} scenes:</p>
+                <ul className="text-sm text-gold-dim space-y-1">
+                  {scenes.map((scene, i) => (
+                    <li key={i} className="flex items-start gap-2">
+                      <span className="text-gold">{i + 1}.</span>
+                      <span>{scene}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {isGeneratingStory && (
+              <GeneratingAnimation 
+                message={`Generating scene ${currentSceneIndex + 1} of ${scenes.length}...`}
+              />
+            )}
+
+            {generatedClips.length > 0 && !isGeneratingStory && (
+              <div className="space-y-3">
+                <div className="p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
+                  <p className="text-sm text-green-400 font-medium">
+                    ✓ All {generatedClips.length} scenes generated!
+                  </p>
+                  <p className="text-xs text-gold-dim mt-1">
+                    Click "Stitch Together" to combine them into one video.
+                  </p>
+                </div>
+                
+                <div className="grid gap-2">
+                  {generatedClips.map((clip, i) => (
+                    <div key={i} className="flex items-center gap-2 p-2 bg-background rounded">
+                      <span className="text-gold font-medium text-sm">{i + 1}.</span>
+                      <span className="text-sm text-gold-dim flex-1 truncate">{clip.scene}</span>
+                      <a 
+                        href={clip.url} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-xs text-gold hover:underline"
+                      >
+                        View Clip
+                      </a>
+                    </div>
+                  ))}
+                </div>
+
+                <Button 
+                  className="w-full bg-gold text-background hover:bg-gold/90"
+                  onClick={() => {
+                    // TODO: Call stitch worker
+                    alert("Stitch functionality coming soon! For now, you can download each clip separately.");
+                  }}
+                >
+                  <Film className="w-4 h-4 mr-2" />
+                  Stitch Together
+                </Button>
+              </div>
+            )}
+
+            {!isGeneratingStory && generatedClips.length === 0 && (
+              <Button 
+                className="w-full bg-gold text-background hover:bg-gold/90"
+                onClick={startStoryGeneration}
+                disabled={!serverAvailable || storyInput.trim().length < 20}
+              >
+                <Play className="w-4 h-4 mr-2" />
+                {serverAvailable ? "Generate Story" : "Video Server Offline"}
+              </Button>
+            )}
+          </div>
+        ) : (
+          <p className="text-sm text-gold-dim">
+            Enter a narrative script and let AI break it into scenes, generate each clip, and auto-stitch them together.
+          </p>
+        )}
       </Card>
 
       <Card className="art-deco-card p-6 space-y-4">
