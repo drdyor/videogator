@@ -121,5 +121,12 @@ video server — they run on Replicate cloud so no local VRAM is needed. You onl
 
 ---
 
+## NOTE: Pharma Work Paused
+
+- **Status:** Pharma-related features are on hold. See [REALITY_CHECK.md](REALITY_CHECK.md) for the analysis and reasons.
+- **Why:** Resource, licensing, and priority concerns outlined in `REALITY_CHECK.md` recommend pausing active development on pharma features until product and legal signoff.
+- **What this means:** Do not add new pharma-focused model integrations or rollouts (including extensive local GPU work) until stakeholders confirm next steps.
+- **When to resume:** Re-open this item after a product review meeting and confirmation of licensing and compute commitments.
+
 End of TODO
 ```
