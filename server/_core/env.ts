@@ -7,4 +7,6 @@ export const ENV = {
   isProduction: process.env.NODE_ENV === "production",
   forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
+  stitchWorkerUrl: process.env.VITE_STITCH_WORKER_URL ?? "",
+  stitchWorkerKey: process.env.VITE_STITCH_WORKER_KEY ?? "",
 };

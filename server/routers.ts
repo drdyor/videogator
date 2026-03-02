@@ -327,6 +327,25 @@ export const appRouter = router({
         };
       }
     }),
+
+    // Get GPU recommendations for safe frame limits
+    getRecommendations: protectedProcedure.query(async () => {
+      const VIDEO_SERVER_URL = process.env.VIDEO_SERVER_URL;
+      if (!VIDEO_SERVER_URL) {
+        return null;
+      }
+
+      try {
+        const response = await fetch(`${VIDEO_SERVER_URL}/recommendations`, {
+          signal: AbortSignal.timeout(5000),
+        });
+        const data = await response.json();
+        return data;
+      } catch (error) {
+        console.error("Failed to get recommendations:", error);
+        return null;
+      }
+    }),
   }),
 
   projects: router({

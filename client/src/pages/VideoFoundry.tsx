@@ -103,7 +103,41 @@ export default function VideoFoundry() {
   const [storyMode, setStoryMode] = useState(false);
   const [storyInput, setStoryInput] = useState("");
   const [storyModel, setStoryModel] = useState<VideoModel>("modelscope");
+  const [storyFrames, setStoryFrames] = useState<number | undefined>(undefined); // undefined = use model default
   const [scenes, setScenes] = useState<string[]>([]);
+
+  // Get default settings for a model - uses recommendations from server if available
+  const getModelDefaults = (model: VideoModel) => {
+    // Use server recommendations if available
+    if (recommendationsQuery.data?.recommendations?.[model]) {
+      const rec = recommendationsQuery.data.recommendations[model];
+      return {
+        width: rec.width,
+        height: rec.height,
+        numFrames: rec.recommended_frames,
+      };
+    }
+    
+    // Fall back to hardcoded defaults
+    switch (model) {
+      case "modelscope":
+        return { width: 256, height: 256, numFrames: 16 };
+      case "cogvideo":
+        return { width: 720, height: 480, numFrames: 49 };
+      case "mochi":
+      case "hunyuan-video":
+        return { width: 848, height: 480, numFrames: 65 };
+      case "wan-2.2":
+      case "wan-2.2-5b":
+        return { width: 832, height: 480, numFrames: 81 };
+      case "ltx-2":
+        return { width: 768, height: 512, numFrames: 97 };
+      case "stable-video-diffusion":
+        return { width: 1024, height: 576, numFrames: 25 };
+      default:
+        return { width: 832, height: 480, numFrames: 65 };
+    }
+  };
   const [generatedClips, setGeneratedClips] = useState<{scene: string; url: string; jobId: string}[]>([]);
   const [isGeneratingStory, setIsGeneratingStory] = useState(false);
   const [currentSceneIndex, setCurrentSceneIndex] = useState(-1);
@@ -125,6 +159,7 @@ export default function VideoFoundry() {
   const createJobMutation = trpc.video.create.useMutation();
   const generateMutation = trpc.video.generate.useMutation({
     onSuccess: (data) => {
+      console.log("Generation started successfully:", data);
       setJobId(data.jobId);
     },
     onError: (error) => {
@@ -154,6 +189,30 @@ export default function VideoFoundry() {
   const serverAvailable = serverHealthQuery.data?.available ?? false;
   const serverDevice = (serverHealthQuery.data as any)?.device ?? "unknown";
   const serverGpu = (serverHealthQuery.data as any)?.gpu_available ? "GPU" : "CPU";
+  const vramGb = (serverHealthQuery.data as any)?.vram_gb ?? 0;
+  const gpuName = (serverHealthQuery.data as any)?.gpu_info?.name ?? "Unknown GPU";
+
+  // Get GPU recommendations for safe frame limits
+  const recommendationsQuery = trpc.video.getRecommendations.useQuery(undefined, {
+    refetchInterval: 60000, // Check every minute
+    enabled: serverAvailable,
+  });
+  
+  // Get safe defaults from recommendations
+  const getSafeDefaults = (model: VideoModel) => {
+    if (!recommendationsQuery.data?.recommendations) {
+      return MODEL_DEFAULTS[model];
+    }
+    const rec = recommendationsQuery.recommendations[model];
+    if (!rec) {
+      return MODEL_DEFAULTS[model];
+    }
+    return {
+      width: rec.width || MODEL_DEFAULTS[model].width,
+      height: rec.height || MODEL_DEFAULTS[model].height,
+      numFrames: rec.recommended_frames || MODEL_DEFAULTS[model].numFrames,
+    };
+  };
 
   // Can run if we have operations (input URL optional for text-to-video)
   const canRun = operations.length > 0;
@@ -181,8 +240,8 @@ export default function VideoFoundry() {
   };
 
   const addGenerate = () => {
-    const defaultModel: VideoModel = "hunyuan-video";
-    const defaults = MODEL_DEFAULTS[defaultModel];
+    const defaultModel: VideoModel = "modelscope"; // Use ModelScope as default (most compatible)
+    const defaults = getSafeDefaults(defaultModel);
     setOperations(prev => [
       ...prev,
       {
@@ -254,6 +313,13 @@ export default function VideoFoundry() {
   const startStoryGeneration = async () => {
     if (!storyInput.trim() || !serverAvailable) return;
     
+    // Debug: Log story generation parameters
+    console.log("Story generation params:", {
+      storyModel,
+      storyFrames,
+      storyInputLength: storyInput.length,
+    });
+    
     const parsedScenes = parseStoryToScenes(storyInput);
     if (parsedScenes.length < 2) {
       setStoryError("Please enter a longer story with at least 2 scenes (separated by periods or new lines)");
@@ -268,14 +334,16 @@ export default function VideoFoundry() {
     setCurrentSceneIndex(0);
     
     // Generate first scene
+    const defaults = getModelDefaults(storyModel);
+    const numFrames = storyFrames || defaults.numFrames;
     try {
       const result = await generateMutation.mutateAsync({
         prompt: parsedScenes[0],
         negativePrompt: "",
         model: storyModel,
-        width: 832,
-        height: 480,
-        numFrames: 81,
+        width: defaults.width,
+        height: defaults.height,
+        numFrames: numFrames,
         numInferenceSteps: 30,
         guidanceScale: 7.0,
         fps: 8,
@@ -395,13 +463,15 @@ export default function VideoFoundry() {
         const nextIndex = currentSceneIndex + 1;
         setCurrentSceneIndex(nextIndex);
 
+        const defaults = getModelDefaults(storyModel);
+        const numFrames = storyFrames || defaults.numFrames;
         generateMutationRef.current.mutate({
           prompt: scenes[nextIndex],
           negativePrompt: "",
           model: storyModel,
-          width: 832,
-          height: 480,
-          numFrames: 81,
+          width: defaults.width,
+          height: defaults.height,
+          numFrames: numFrames,
           numInferenceSteps: 30,
           guidanceScale: 7.0,
           fps: 8,
@@ -420,6 +490,13 @@ export default function VideoFoundry() {
 
   const handleRun = async () => {
     if (!canRun) return;
+    
+    // Debug: Log the parameters being sent
+    console.log("Video generation params:", {
+      operations: operations,
+      serverAvailable,
+      inputUrl: inputUrl.trim() || undefined,
+    });
     
     // If we have a single generate operation and server is available, use direct generation
     if (operations.length === 1 && operations[0].type === "generate" && serverAvailable) {
@@ -492,12 +569,19 @@ export default function VideoFoundry() {
             {serverHealthQuery.isLoading ? (
               <div className="text-gold-dim">Checking...</div>
             ) : serverAvailable ? (
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-green-500" />
-                <span>Online</span>
-                <Badge variant="secondary" className="text-xs bg-gold/10 text-gold">
-                  {serverDevice === "cuda" ? `${serverGpu}` : "CPU"}
-                </Badge>
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-green-500" />
+                  <span>Online</span>
+                  <Badge variant="secondary" className="text-xs bg-gold/10 text-gold">
+                    {serverDevice === "cuda" ? `${serverGpu}` : "CPU"}
+                  </Badge>
+                </div>
+                {vramGb > 0 && (
+                  <div className="text-xs text-gold-dim">
+                    {gpuName} • {vramGb.toFixed(1)}GB VRAM
+                  </div>
+                )}
               </div>
             ) : (
               <div className="flex items-center gap-2 text-destructive">
@@ -771,6 +855,24 @@ export default function VideoFoundry() {
                   <SelectItem value="mochi">Mochi (Anime style, 12GB, 848×480)</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+
+            {/* Frame count override */}
+            <div>
+              <Label className="text-xs text-muted-foreground">Frame Count (optional)</Label>
+              <Input
+                type="number"
+                placeholder={String(getModelDefaults(storyModel).numFrames)}
+                value={storyFrames || ""}
+                onChange={(e) => setStoryFrames(e.target.value ? parseInt(e.target.value) : undefined)}
+                className="mt-2"
+                min={1}
+                max={200}
+                disabled={isGeneratingStory}
+              />
+              <p className="text-xs text-gold-dim mt-1">
+                Leave empty to use model default. For your 17GB GPU, try 9-16 frames.
+              </p>
             </div>
 
             {storyError && (

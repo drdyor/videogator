@@ -174,7 +174,21 @@ def get_video_duration(path: Path) -> float:
 
 
 # --- Job State (simple in-memory; swap for Redis in prod) ---
+MAX_JOBS = 100  # Limit to prevent memory issues
+JOB_TTL_SECONDS = 3600  # Jobs auto-expire after 1 hour
+
 jobs: dict[str, StitchResponse] = {}
+
+
+def cleanup_old_jobs():
+    """Remove old completed/error jobs to prevent memory leaks."""
+    if len(jobs) > MAX_JOBS:
+        # Remove oldest completed/error jobs
+        completed_jobs = [jid for jid, job in jobs.items() 
+                         if job.status in ("done", "error")]
+        jobs_to_remove = completed_jobs[:len(completed_jobs) - (MAX_JOBS // 2)]
+        for jid in jobs_to_remove:
+            jobs.pop(jid, None)
 
 
 async def run_stitch_job(job_id: str, request: StitchRequest):
@@ -242,6 +256,9 @@ async def stitch(
         raise HTTPException(status_code=400, detail="Need at least 2 clips to stitch")
     if len(request.clips) > 50:
         raise HTTPException(status_code=400, detail="Max 50 clips per job")
+
+    # Cleanup old jobs to prevent memory leaks
+    cleanup_old_jobs()
 
     job_id = request.job_id or str(uuid.uuid4())
     response = StitchResponse(job_id=job_id, status="queued")

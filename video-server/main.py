@@ -828,48 +828,184 @@ def get_generator(model: VideoModel) -> VideoGenerator:
 async def generate_video_task(job_id: str, request: GenerateRequest):
     """Background task for video generation"""
     try:
-        jobs[job_id]["status"] = "processing"
-        jobs[job_id]["progress"] = 0.0
+        try:
+            jobs[job_id]["status"] = "processing"
+            jobs[job_id]["progress"] = 0.0
 
-        output_path = OUTPUT_DIR / f"{job_id}"
+            logger.info(f"Job {job_id} starting: model={request.model.value}, num_frames={request.num_frames}, width={request.width}, height={request.height}")
+            
+            # Check available VRAM at job start
+            if torch.cuda.is_available():
+                vram_total = torch.cuda.get_device_properties(0).total_memory / 1e9
+                vram_available = (torch.cuda.get_device_properties(0).total_memory - torch.cuda.memory_allocated(0)) / 1e9
+                logger.info(f"Job {job_id} VRAM: {vram_available:.2f}GB available out of {vram_total:.2f}GB total")
+                
+                # Get model config and estimate if request is feasible
+                try:
+                    cfg = MODEL_CONFIGS[request.model]
+                    estimated_vram_needed = cfg.base_vram_gb + (request.num_frames * cfg.per_frame_vram_gb)
+                    logger.info(f"Job {job_id} estimated VRAM needed: {estimated_vram_needed:.2f}GB (base: {cfg.base_vram_gb}GB + {request.num_frames} frames * {cfg.per_frame_vram_gb}GB)")
+                    if estimated_vram_needed > vram_total:
+                        logger.warning(f"Job {job_id} WARNING: Estimated VRAM ({estimated_vram_needed:.2f}GB) exceeds total VRAM ({vram_total:.2f}GB)!")
+                except Exception as est_err:
+                    logger.warning(f"Job {job_id} could not estimate VRAM: {est_err}")
 
-        # Replicate cloud models — handle before local generator path
-        if request.model in REPLICATE_CLOUD_MODELS:
-            video_path = await generate_via_replicate(job_id, request, output_path)
+            output_path = OUTPUT_DIR / f"{job_id}"
+
+            # Replicate cloud models — handle before local generator path
+            if request.model in REPLICATE_CLOUD_MODELS:
+                video_path = await generate_via_replicate(job_id, request, output_path)
+                jobs[job_id]["status"] = "completed"
+                jobs[job_id]["progress"] = 1.0
+                jobs[job_id]["output_url"] = f"/output/{video_path.name}"
+                logger.info(f"Job {job_id} ({request.model.value}) completed via Replicate: {video_path}")
+                return
+
+            # Free any VRAM left over from previous jobs before loading model
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+
+            generator = get_generator(request.model)
+
+            # Run generation in thread pool
+            loop = asyncio.get_event_loop()
+            # Primary generation attempt
+            video_path = await loop.run_in_executor(
+                None,
+                lambda: generator.generate(request, output_path)
+            )
+
             jobs[job_id]["status"] = "completed"
             jobs[job_id]["progress"] = 1.0
             jobs[job_id]["output_url"] = f"/output/{video_path.name}"
-            logger.info(f"Job {job_id} ({request.model.value}) completed via Replicate: {video_path}")
-            return
 
-        # Free any VRAM left over from previous jobs before loading model
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
+            logger.info(f"Job {job_id} completed: {video_path}")
+            # Release VRAM after generation so the next job starts with a clean GPU state
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            
+        except Exception as e:
+            # This catches any exception during generation and marks job as failed
+            # The outer try/except ensures the server keeps running
+            logger.error(f"Job {job_id} failed with error: {e}")
+            
+            # If OOM/CUDA error, try automatic fallback
+            err_str = str(e).lower()
+            if "out of memory" in err_str or "cuda error" in err_str or "oom" in err_str or "cuda" in err_str:
+                try:
+                    logger.info(f"Attempting OOM fallback for job {job_id}")
+                    suggestion = estimate_suggestion_for_request(request)
+                except Exception:
+                    suggestion = None
 
-        generator = get_generator(request.model)
+                if suggestion:
+                    jobs[job_id]["error_suggestion"] = suggestion
 
-        # Run generation in thread pool
-        loop = asyncio.get_event_loop()
-        # Primary generation attempt
-        video_path = await loop.run_in_executor(
-            None,
-            lambda: generator.generate(request, output_path)
-        )
+                try:
+                    if suggestion and isinstance(suggestion, dict):
+                        fallback_frames = suggestion.get("recommended_frames") or suggestion.get("safe_frames") or suggestion.get("max_frames_safe")
+                    else:
+                        fallback_frames = None
 
-        jobs[job_id]["status"] = "completed"
-        jobs[job_id]["progress"] = 1.0
-        jobs[job_id]["output_url"] = f"/output/{video_path.name}"
+                    if not fallback_frames:
+                        fallback_frames = 9  # Minimum frames
 
-        logger.info(f"Job {job_id} completed: {video_path}")
-        # Release VRAM after generation so the next job starts with a clean GPU state
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-        
+                    new_width = 256
+                    new_height = 256
+
+                    if fallback_frames >= request.num_frames and new_width >= request.width and new_height >= request.height:
+                        raise e  # Fallback wouldn't help, re-raise
+
+                    logger.info(f"Attempting OOM fallback: frames={fallback_frames}, {new_width}x{new_height}")
+
+                    if torch.cuda.is_available():
+                        torch.cuda.synchronize()
+                        torch.cuda.empty_cache()
+                        import gc
+                        gc.collect()
+
+                    retry_payload = request.dict()
+                    retry_payload["num_frames"] = int(fallback_frames)
+                    retry_payload["width"] = int(new_width)
+                    retry_payload["height"] = int(new_height)
+                    retry_request = GenerateRequest(**retry_payload)
+
+                    video_path = await loop.run_in_executor(
+                        None,
+                        lambda: generator.generate(retry_request, output_path)
+                    )
+
+                    jobs[job_id]["status"] = "completed"
+                    jobs[job_id]["progress"] = 1.0
+                    jobs[job_id]["output_url"] = f"/output/{video_path.name}"
+                    jobs[job_id]["error_suggestion"] = jobs[job_id].get("error_suggestion") or {"note": "Automatically retried with reduced frames/resolution"}
+                    logger.info(f"Job {job_id} completed after OOM fallback: {video_path}")
+                    return
+                except Exception as e2:
+                    logger.error(f"OOM fallback for job {job_id} also failed: {e2}")
+                    
+                    # Try ModelScope fallback
+                    if request.model != VideoModel.MODELSCOPE:
+                        try:
+                            logger.info(f"Attempting ModelScope fallback for job {job_id}")
+                            
+                            if torch.cuda.is_available():
+                                torch.cuda.synchronize()
+                                torch.cuda.empty_cache()
+                                import gc
+                                gc.collect()
+                            
+                            retry_payload = request.model_dump()
+                            retry_payload["model"] = VideoModel.MODELSCOPE
+                            retry_payload["num_frames"] = min(request.num_frames, 16)
+                            retry_payload["width"] = 256
+                            retry_payload["height"] = 256
+                            retry_request = GenerateRequest(**retry_payload)
+                            
+                            ModelScopeGenerator = generators.get(VideoModel.MODELSCOPE)
+                            if ModelScopeGenerator:
+                                model_scope_gen = ModelScopeGenerator()
+                                video_path = await loop.run_in_executor(
+                                    None,
+                                    lambda: model_scope_gen.generate(retry_request, output_path)
+                                )
+                                
+                                jobs[job_id]["status"] = "completed"
+                                jobs[job_id]["progress"] = 1.0
+                                jobs[job_id]["output_url"] = f"/output/{video_path.name}"
+                                jobs[job_id]["error_suggestion"] = {"note": "Switched to ModelScope due to insufficient VRAM"}
+                                logger.info(f"Job {job_id} completed with ModelScope fallback")
+                                return
+                        except Exception as e3:
+                            logger.error(f"ModelScope fallback also failed: {e3}")
+            
+            raise  # Re-raise to trigger outer exception handler
+    
     except Exception as e:
-        logger.error(f"Job {job_id} failed: {e}")
+        # Outer handler - ensures server keeps running even after errors
+        logger.error(f"Job {job_id} outer exception handler triggered: {e}")
+        # Mark job as failed
+        jobs[job_id]["status"] = "failed"
+        jobs[job_id]["error"] = str(e)
+        
+        # Try to provide helpful suggestion
+        try:
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        except Exception:
+            pass
+            
+        try:
+            suggestion = estimate_suggestion_for_request(request)
+            jobs[job_id]["error_suggestion"] = suggestion
+            logger.info(f"Job {job_id} error suggestion: {suggestion}")
+        except Exception:
+            pass
+        
+        logger.info(f"Job {job_id} marked as failed - server continues running for next jobs")
         # If OOM/CUDA error, try a single automatic fallback (reduced frames / resolution)
         err_str = str(e).lower()
-        if "out of memory" in err_str or "cuda error" in err_str or "oom" in err_str:
+        if "out of memory" in err_str or "cuda error" in err_str or "oom" in err_str or "cuda" in err_str:
             try:
                 suggestion = estimate_suggestion_for_request(request)
             except Exception:
@@ -887,13 +1023,13 @@ async def generate_video_task(job_id: str, request: GenerateRequest):
                 else:
                     fallback_frames = None
 
-                # Fallback strategy: prefer suggested frames; otherwise halve frames and reduce resolution by 25%
+                # Fallback strategy: prefer suggested frames; otherwise reduce to minimum
                 if not fallback_frames:
-                    fallback_frames = max(9, request.num_frames // 2)
+                    fallback_frames = 9  # Minimum frames
 
-                # Reduce resolution moderately
-                new_width = max(256, int(request.width * 0.75))
-                new_height = max(256, int(request.height * 0.75))
+                # Reduce resolution significantly for OOM - go to minimum 256x256
+                new_width = 256
+                new_height = 256
 
                 # If fallback would not change anything, skip
                 if fallback_frames >= request.num_frames and new_width >= request.width and new_height >= request.height:
@@ -901,8 +1037,15 @@ async def generate_video_task(job_id: str, request: GenerateRequest):
 
                 logger.info(f"Attempting OOM fallback for job {job_id}: frames={fallback_frames}, {new_width}x{new_height}")
 
+                # Aggressively clear GPU memory before retry
+                if torch.cuda.is_available():
+                    torch.cuda.synchronize()
+                    torch.cuda.empty_cache()
+                    import gc
+                    gc.collect()
+
                 # Build a new GenerateRequest for retry
-                retry_payload = request.dict()
+                retry_payload = request.model_dump()
                 retry_payload["num_frames"] = int(fallback_frames)
                 retry_payload["width"] = int(new_width)
                 retry_payload["height"] = int(new_height)
@@ -918,11 +1061,51 @@ async def generate_video_task(job_id: str, request: GenerateRequest):
                 jobs[job_id]["status"] = "completed"
                 jobs[job_id]["progress"] = 1.0
                 jobs[job_id]["output_url"] = f"/output/{video_path.name}"
-                jobs[job_id]["error_suggestion"] = jobs[job_id].get("error_suggestion") or {"note": "Automatically retried with reduced frames/resolution"}
+                jobs[job_id]["error_suggestion"] = jobs[job_id].get("error_suggestion") or {"note": "Automatically retried with reduced frames/resolution (9 frames, 256x256)"}
                 logger.info(f"Job {job_id} completed after OOM fallback: {video_path}")
                 return
             except Exception as e2:
                 logger.error(f"OOM fallback for job {job_id} also failed: {e2}")
+                
+                # SECOND FALLBACK: Try switching to ModelScope (only 4GB VRAM needed)
+                if request.model != VideoModel.MODELSCOPE:
+                    try:
+                        logger.info(f"Attempting second fallback: switching to ModelScope for job {job_id}")
+                        
+                        # Clear GPU memory
+                        if torch.cuda.is_available():
+                            torch.cuda.synchronize()
+                            torch.cuda.empty_cache()
+                            import gc
+                            gc.collect()
+                        
+                        # Switch to ModelScope which needs less VRAM
+                        retry_payload = request.model_dump()
+                        retry_payload["model"] = VideoModel.MODELSCOPE
+                        retry_payload["num_frames"] = min(request.num_frames, 16)  # ModelScope default
+                        retry_payload["width"] = 256
+                        retry_payload["height"] = 256
+                        retry_request = GenerateRequest(**retry_payload)
+                        
+                        # Get ModelScope generator
+                        ModelScopeGenerator = generators.get(VideoModel.MODELSCOPE)
+                        if ModelScopeGenerator:
+                            model_scope_gen = ModelScopeGenerator()
+                            video_path = await loop.run_in_executor(
+                                None,
+                                lambda: model_scope_gen.generate(retry_request, output_path)
+                            )
+                            
+                            jobs[job_id]["status"] = "completed"
+                            jobs[job_id]["progress"] = 1.0
+                            jobs[job_id]["output_url"] = f"/output/{video_path.name}"
+                            jobs[job_id]["error_suggestion"] = {"note": "Switched to ModelScope due to insufficient VRAM for " + request.model.value}
+                            logger.info(f"Job {job_id} completed with ModelScope fallback: {video_path}")
+                            return
+                    except Exception as e3:
+                        logger.error(f"ModelScope fallback also failed: {e3}")
+                
+                # All fallbacks failed
                 jobs[job_id]["status"] = "failed"
                 jobs[job_id]["error"] = f"{e} | fallback error: {e2}"
                 # Keep any suggestion set above
@@ -954,17 +1137,32 @@ async def root():
 
 @app.get("/health")
 async def health():
+    """Return health status and GPU info"""
+    gpu_info = None
+    if DEVICE == "cuda" and torch.cuda.is_available():
+        props = torch.cuda.get_device_properties(0)
+        gpu_info = {
+            "name": torch.cuda.get_device_name(0),
+            "total_memory_gb": props.total_memory / 1e9,
+            "allocated_gb": torch.cuda.memory_allocated(0) / 1e9,
+            "cached_gb": torch.cuda.memory_reserved(0) / 1e9,
+        }
+    
     return {
         "status": "healthy",
         "device": DEVICE,
         "gpu_available": torch.cuda.is_available(),
-        "vram_gb": torch.cuda.get_device_properties(0).total_memory / 1e9 if DEVICE == "cuda" else 0,
+        "vram_gb": gpu_info["total_memory_gb"] if gpu_info else 0,
+        "gpu_info": gpu_info,
     }
 
 
 @app.post("/generate", response_model=GenerateResponse)
 async def generate(request: GenerateRequest, background_tasks: BackgroundTasks):
     """Start video generation job"""
+    # Log incoming request for debugging
+    logger.info(f"Generate request received: model={request.model.value}, num_frames={request.num_frames}, width={request.width}, height={request.height}")
+    
     # Check for required Python packages before accepting the job
     missing = check_dependencies() if 'check_dependencies' in globals() else []
     if missing:
@@ -979,7 +1177,7 @@ async def generate(request: GenerateRequest, background_tasks: BackgroundTasks):
     jobs[job_id] = {
         "status": "queued",
         "progress": 0.0,
-        "request": request.dict(),
+        "request": request.model_dump(),
         "created_at": time.time(),
     }
     
@@ -1043,6 +1241,46 @@ async def list_models():
     }
 
 
+@app.get("/recommendations")
+async def get_recommendations():
+    """Get recommended settings based on available GPU VRAM"""
+    # Get available VRAM
+    vram_gb = 0.0
+    gpu_name = "Unknown"
+    if DEVICE == "cuda" and torch.cuda.is_available():
+        props = torch.cuda.get_device_properties(0)
+        vram_gb = props.total_memory / 1e9
+        gpu_name = torch.cuda.get_device_name(0)
+    
+    recommendations = {}
+    for model, config in MODEL_CONFIGS.items():
+        if config.per_frame_vram_gb > 0:
+            available = max(0.0, vram_gb - config.base_vram_gb)
+            safe_frames = max(1, int(available // config.per_frame_vram_gb))
+            # Also calculate max that would fit (allowing some overhead)
+            max_frames = max(1, int((vram_gb * 0.9) // config.per_frame_vram_gb))
+        else:
+            safe_frames = config.default_frames
+            max_frames = config.default_frames
+        
+        recommendations[model.value] = {
+            "name": config.name,
+            "recommended_frames": min(safe_frames, config.default_frames),
+            "max_frames": min(max_frames, config.default_frames),
+            "default_frames": config.default_frames,
+            "width": config.default_width,
+            "height": config.default_height,
+            "estimated_vram_gb": config.base_vram_gb + (safe_frames * config.per_frame_vram_gb),
+            "vram_available": vram_gb > 0,
+        }
+    
+    return {
+        "gpu_name": gpu_name,
+        "vram_gb": vram_gb,
+        "recommendations": recommendations,
+    }
+
+
 @app.post("/ollama/generate")
 async def ollama_generate(request: dict):
     """
@@ -1085,7 +1323,7 @@ async def ollama_generate(request: dict):
     jobs[job_id] = {
         "status": "queued",
         "progress": 0.0,
-        "request": generate_request.dict(),
+        "request": generate_request.model_dump(),
         "created_at": time.time(),
     }
     

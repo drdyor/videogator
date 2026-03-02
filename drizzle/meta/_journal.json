@@ -8,6 +8,13 @@
       "when": 1770758113805,
       "tag": "0000_thin_tony_stark",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1772466066682,
+      "tag": "0001_woozy_hex",
+      "breakpoints": true
     }
   ]
 }

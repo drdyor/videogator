@@ -7,8 +7,17 @@
  *   STITCH_WORKER_KEY=your-api-key-matching-worker
  */
 
-const WORKER_URL = process.env.STITCH_WORKER_URL!;
-const WORKER_KEY = process.env.STITCH_WORKER_KEY!;
+const WORKER_URL = process.env.STITCH_WORKER_URL;
+const WORKER_KEY = process.env.STITCH_WORKER_KEY;
+
+// Validate required env vars at module load time
+if (!WORKER_URL) {
+  throw new Error("Missing required env var: STITCH_WORKER_URL. Please set it in your Vercel project settings.");
+}
+
+if (!WORKER_KEY) {
+  throw new Error("Missing required env var: STITCH_WORKER_KEY. Please set it in your Vercel project settings.");
+}
 
 type Transition = "none" | "fade";
 
